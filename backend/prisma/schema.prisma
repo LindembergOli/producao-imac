@@ -1,0 +1,183 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================
+// ENUMS
+// ========================================
+
+enum Sector {
+  CONFEITARIA
+  PAES
+  SALGADO
+  PAO_DE_QUEIJO
+  EMBALADORA
+}
+
+enum Unit {
+  KG
+  UND
+}
+
+enum LossType {
+  MASSA
+  EMBALAGEM
+  INSUMO
+}
+
+enum ErrorCategory {
+  OPERACIONAL
+  EQUIPAMENTO
+  MATERIAL
+  QUALIDADE
+}
+
+enum MaintenanceStatus {
+  EM_ABERTO
+  FECHADO
+}
+
+enum AbsenceType {
+  ATESTADO
+  FALTA_INJUSTIFICADA
+  BANCO_DE_HORAS
+}
+
+// ========================================
+// MODELS
+// ========================================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String   // Hash bcrypt
+  name      String
+  role      String   @default("user") // admin, user
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Employee {
+  id        Int      @id @default(autoincrement())
+  sector    Sector
+  name      String
+  role      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("employees")
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  sector    Sector
+  name      String
+  unit      Unit
+  yield     Float?
+  unitCost  Float?   @map("unit_cost")
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("products")
+}
+
+model Machine {
+  id        Int      @id @default(autoincrement())
+  sector    Sector
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("machines")
+}
+
+model ProductionSpeed {
+  id              Int      @id @default(autoincrement())
+  mesAno          String
+  sector          Sector
+  produto         String
+  metaMes         Float
+  dailyProduction Json     // Array de {programado, realizado}
+  totalProgramado Float
+  totalRealizado  Float
+  velocidade      Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("production_speed")
+}
+
+model Loss {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  sector    Sector
+  product   String
+  lossType  LossType
+  quantity  Float
+  unit      Unit
+  unitCost  Float
+  totalCost Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("losses")
+}
+
+model Error {
+  id          Int           @id @default(autoincrement())
+  date        DateTime
+  sector      Sector
+  product     String
+  description String
+  action      String?
+  category    ErrorCategory
+  cost        Float
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("errors")
+}
+
+model Maintenance {
+  id            Int               @id @default(autoincrement())
+  date          DateTime
+  sector        Sector
+  machine       String
+  requester     String
+  technician    String?
+  problem       String
+  solution      String?
+  startTime     String
+  endTime       String
+  durationHours Float
+  status        MaintenanceStatus
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@map("maintenance")
+}
+
+model Absenteeism {
+  id           Int         @id @default(autoincrement())
+  employeeName String
+  sector       Sector
+  date         DateTime
+  absenceType  AbsenceType
+  daysAbsent   Int
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("absenteeism")
+}
