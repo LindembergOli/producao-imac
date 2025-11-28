@@ -3,6 +3,7 @@
  */
 
 import { config } from '../config/env.js';
+import logger from '../utils/logger.js';
 
 export class AppError extends Error {
     constructor(message, statusCode = 500) {
@@ -17,11 +18,12 @@ export const errorHandler = (err, req, res, next) => {
     let { statusCode = 500, message } = err;
 
     // Log do erro
-    console.error('❌ Erro:', {
+    logger.error('Erro na aplicação', {
         message: err.message,
         stack: config.isDevelopment ? err.stack : undefined,
         url: req.originalUrl,
         method: req.method,
+        ip: req.ip,
     });
 
     // Erros do Prisma
