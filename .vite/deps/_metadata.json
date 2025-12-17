@@ -1,0 +1,76 @@
+{
+  "hash": "bb8dbcd5",
+  "configHash": "a5ef475c",
+  "lockfileHash": "96e97f7e",
+  "browserHash": "02a1b184",
+  "optimized": {
+    "dompurify": {
+      "src": "../../node_modules/dompurify/dist/purify.es.mjs",
+      "file": "dompurify.js",
+      "fileHash": "769d5014",
+      "needsInterop": false
+    },
+    "exceljs": {
+      "src": "../../node_modules/exceljs/dist/exceljs.min.js",
+      "file": "exceljs.js",
+      "fileHash": "6ac90e74",
+      "needsInterop": true
+    },
+    "jspdf": {
+      "src": "../../node_modules/jspdf/dist/jspdf.es.min.js",
+      "file": "jspdf.js",
+      "fileHash": "6fe705c9",
+      "needsInterop": false
+    },
+    "jspdf-autotable": {
+      "src": "../../node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.mjs",
+      "file": "jspdf-autotable.js",
+      "fileHash": "ca57834b",
+      "needsInterop": false
+    },
+    "lucide-react": {
+      "src": "../../node_modules/lucide-react/dist/esm/lucide-react.js",
+      "file": "lucide-react.js",
+      "fileHash": "597c1872",
+      "needsInterop": false
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "7f9422d7",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "775e61bd",
+      "needsInterop": true
+    },
+    "recharts": {
+      "src": "../../node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "2bf72c9a",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "html2canvas.esm-BJYJRQTM": {
+      "file": "html2canvas__esm-BJYJRQTM.js"
+    },
+    "index.es-C6C4S7EE": {
+      "file": "index__es-C6C4S7EE.js"
+    },
+    "chunk-SITVF2AJ": {
+      "file": "chunk-SITVF2AJ.js"
+    },
+    "chunk-TLYC62QM": {
+      "file": "chunk-TLYC62QM.js"
+    },
+    "chunk-642SEM5W": {
+      "file": "chunk-642SEM5W.js"
+    },
+    "chunk-2TUXWMP5": {
+      "file": "chunk-2TUXWMP5.js"
+    }
+  }
+}

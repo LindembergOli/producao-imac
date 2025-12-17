@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # ================================
+  # Banco de Dados PostgreSQL
+  # ================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: imac-postgres-prod
+    restart: always
+    labels:
+      com.imac.service: "database"
+      com.imac.environment: "production"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Configurações de performance
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=pt_BR.UTF-8"
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    networks:
+      - imac-network-prod
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ================================
+  # API Backend (Produção)
+  # ================================
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: imac-backend-prod
+    restart: always
+    labels:
+      com.imac.service: "api"
+      com.imac.environment: "production"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS}
+      LOG_LEVEL: info
+    volumes:
+      - backend_logs_prod:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - imac-network-prod
+    command: sh -c "npx prisma migrate deploy && node src/server.js"
+
+  # ================================
+  # Frontend (Nginx Produção)
+  # ================================
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: imac-frontend-prod
+    restart: always
+    labels:
+      com.imac.service: "frontend"
+      com.imac.environment: "production"
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - imac-network-prod
+
+# ================================
+# Redes
+# ================================
+networks:
+  imac-network-prod:
+    driver: bridge
+
+# ================================
+# Volumes
+# ================================
+volumes:
+  postgres_data_prod:
+    driver: local
+  backend_logs_prod:
+    driver: local

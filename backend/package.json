@@ -7,10 +7,17 @@
     "scripts": {
         "dev": "nodemon src/server.js",
         "start": "node src/server.js",
+        "lint": "eslint src --ext .js",
+        "lint:fix": "eslint src --ext .js --fix",
+        "validate": "prisma validate",
         "prisma:generate": "prisma generate",
         "prisma:migrate": "prisma migrate dev",
         "prisma:studio": "prisma studio",
-        "prisma:seed": "node prisma/seed.js"
+        "prisma:seed": "node prisma/seed.js",
+        "test": "NODE_ENV=test jest --runInBand",
+        "test:watch": "NODE_ENV=test jest --watch",
+        "test:coverage": "NODE_ENV=test jest --coverage",
+        "backup": "node scripts/backup.js"
     },
     "keywords": [
         "express",
@@ -33,7 +40,19 @@
         "zod": "^3.22.4"
     },
     "devDependencies": {
+        "jest": "^29.7.0",
         "nodemon": "^3.0.2",
-        "prisma": "^5.8.0"
+        "prisma": "^5.8.0",
+        "supertest": "^6.3.3"
+    },
+    "jest": {
+        "testEnvironment": "node",
+        "coveragePathIgnorePatterns": [
+            "/node_modules/"
+        ],
+        "testMatch": [
+            "**/__tests__/**/*.js",
+            "**/?(*.)+(spec|test).js"
+        ]
     }
 }

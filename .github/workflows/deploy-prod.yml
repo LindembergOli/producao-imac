@@ -1,0 +1,109 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+      
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.PROD_SSH_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.PROD_ENV_FILE }}" > .env
+      
+      - name: Copy files to server
+        run: |
+          scp docker-compose.prod.yml ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:~/imac-app/
+          scp nginx-proxy.conf ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:~/imac-app/
+          scp .env ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:~/imac-app/
+      
+      - name: Backup current deployment
+        run: |
+          ssh ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} << 'EOF'
+            cd ~/imac-app
+            
+            # Create backup
+            BACKUP_DIR=~/backups/$(date +%Y%m%d_%H%M%S)
+            mkdir -p $BACKUP_DIR
+            
+            # Backup database
+            docker-compose -f docker-compose.prod.yml exec -T postgres \
+              pg_dump -U $POSTGRES_USER $POSTGRES_DB > $BACKUP_DIR/database.sql
+            
+            echo "✅ Backup created at $BACKUP_DIR"
+          EOF
+      
+      - name: Deploy via SSH
+        run: |
+          ssh ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} << 'EOF'
+            cd ~/imac-app
+            
+            # Pull latest images
+            docker-compose -f docker-compose.prod.yml pull
+            
+            # Stop current containers
+            docker-compose -f docker-compose.prod.yml down
+            
+            # Start new containers
+            docker-compose -f docker-compose.prod.yml up -d
+            
+            # Run migrations
+            sleep 15
+            docker-compose -f docker-compose.prod.yml exec -T backend npx prisma migrate deploy
+            
+            # Show status
+            docker-compose -f docker-compose.prod.yml ps
+          EOF
+      
+      - name: Health Check
+        run: |
+          sleep 20
+          curl -f http://${{ secrets.PROD_SSH_HOST }}/health || exit 1
+      
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          ssh ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} << 'EOF'
+            cd ~/imac-app
+            
+            echo "❌ Deployment failed! Rolling back..."
+            
+            # Get latest backup
+            LATEST_BACKUP=$(ls -t ~/backups/ | head -1)
+            
+            # Restore database
+            docker-compose -f docker-compose.prod.yml exec -T postgres \
+              psql -U $POSTGRES_USER $POSTGRES_DB < ~/backups/$LATEST_BACKUP/database.sql
+            
+            # Restart with previous version
+            docker-compose -f docker-compose.prod.yml up -d
+            
+            echo "✅ Rollback completed"
+          EOF
+      
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "✅ Deployment to Production successful!"
+          echo "🔗 Application: http://${{ secrets.PROD_SSH_HOST }}"
+          echo "📊 Version: ${{ github.sha }}"

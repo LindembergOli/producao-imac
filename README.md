@@ -1,70 +1,93 @@
-# IMAC Congelados - Controle de Produção
+# Sistema de Controle de Produção - IMAC Congelados
 
-Sistema de controle de produção, perdas e manutenção para a indústria IMAC Congelados.
+O sistema é dividido em duas partes principais:
+- **Frontend**: Interface web moderna construída com React e Tailwind CSS.
+- **Backend**: API robusta em Node.js com banco de dados PostgreSQL.
 
-## 🚀 Funcionalidades
+---
 
-- **Dashboard**: Visão geral dos KPIs de produção, perdas, erros e absenteísmo.
-- **Controle de Produção**: Registro de velocidade e eficiência por setor.
-- **Gestão de Perdas**: Monitoramento de perdas por quantidade e custo.
-- **Manutenção**: Controle de ordens de serviço e paradas de máquina.
-- **RH**: Gestão de absenteísmo e cadastro de funcionários.
-- **Cadastros**: Produtos, Máquinas e Funcionários.
-- **Relatórios**: Exportação de dados em Excel e PDF.
+## 🚀 Estrutura do Projeto
 
-## 🛡️ Segurança e Tecnologia
+O projeto está organizado em duas pastas principais para facilitar a manutenção:
 
-Este projeto foi refatorado para atender a altos padrões de segurança e performance:
+```
+/
+├── frontend/     # Código da aplicação web (React, Vite, Tailwind)
+├── backend/      # Código da API (Node.js, Express, Prisma)
+├── docs/         # Documentação técnica detalhada
+├── .github/      # Workflows de CI/CD (GitHub Actions)
+└── docker-compose.yml # Orquestração dos containers para desenvolvimento
+```
 
-- **Armazenamento Local Seguro**: Dados salvos em `localStorage` com validação e versionamento (sem dependência de Firebase).
-- **Sanitização de Dados**: Proteção contra XSS usando `DOMPurify` em todos os inputs.
-- **Content Security Policy (CSP)**: Headers de segurança configurados.
-- **Dependências Seguras**: Substituição de bibliotecas vulneráveis (`xlsx` -> `exceljs`).
-- **TypeScript Strict**: Tipagem forte para maior confiabilidade.
-- **Tailwind CSS Local**: Estilização performática sem dependência de CDNs externos.
+---
 
-## 🛠️ Instalação e Execução
+## 🛠️ Tecnologias Utilizadas
+
+### Frontend
+- **React 18**: Biblioteca para construção de interfaces.
+- **TypeScript**: Para maior segurança e qualidade de código.
+- **Tailwind CSS**: Estilização moderna e responsiva.
+- **Vite**: Build tool extremamente rápida.
+- **Recharts**: Gráficos interativos para dashboards.
+- **Lucide React**: Ícones modernos e leves.
+
+### Backend
+- **Node.js**: Ambiente de execução JavaScript.
+- **Express**: Framework web rápido e minimalista.
+- **Prisma ORM**: Manipulação de banco de dados segura e tipada.
+- **PostgreSQL**: Banco de dados relacional robusto.
+- **Zod**: Validação de dados rigorosa.
+- **JWT**: Autenticação segura via tokens.
+
+---
+
+## 💻 Como Rodar o Projeto
+
+A maneira mais fácil de rodar o projeto é usando os scripts facilitadores configurados no `package.json` da raiz.
 
 ### Pré-requisitos
-
-- Node.js (v18 ou superior)
+- Docker e Docker Compose instalados.
+- Node.js (opcional, para rodar scripts de facilitação).
 
 ### Passo a Passo
 
-1. **Instalar dependências:**
+1. **Configuração Inicial**
    ```bash
-   npm install
+   # Instala dependências e configura variáveis de ambiente
+   npm run setup
    ```
+   *Nota: Certifique-se de configurar o arquivo `.env` na raiz e em `backend/.env` se necessário.*
 
-2. **Rodar em desenvolvimento:**
+2. **Rodar em Desenvolvimento**
    ```bash
+   # Inicia backend e frontend em modo dev (com hot-reload)
    npm run dev
    ```
+   Acesse:
+   - Frontend: http://localhost:3000
+   - Backend: http://localhost:3001
+   - Logs: `npm run logs`
 
-3. **Gerar build de produção:**
+3. **Rodar em Produção**
    ```bash
-   npm run build
+   # Build e start dos containers de produção (otimizados)
+   npm run prod:start
    ```
+   Acesse:
+   - Aplicação: http://localhost (Porta 80)
 
-4. **Visualizar build de produção:**
-   ```bash
-   npm run preview
-   ```
+### Comandos Úteis
 
-## 📂 Estrutura do Projeto
+- `npm run stop`: Para todos os containers.
+- `npm run dev:build`: Reconstrói containers de dev.
+- `npm run prod:logs`: Vê logs de produção.
 
-```
-src/
-├── components/     # Componentes reutilizáveis (KpiCard, Modal, etc.)
-├── data/           # Dados iniciais (mockData)
-├── pages/          # Páginas da aplicação
-├── services/       # Serviços (storage, export, validation)
-├── utils/          # Utilitários (sanitize, constants)
-├── types/          # Definições de tipos TypeScript
-└── index.css       # Estilos globais e Tailwind
-```
+---
 
-## 📝 Notas de Segurança
+## 📚 Documentação
 
-- **Dados**: Todos os dados são persistidos apenas no navegador do usuário. Limpar o cache do navegador apagará os dados.
-- **Exportação**: Relatórios são gerados localmente no navegador.
+Para mais detalhes técnicos, consulte a pasta `docs/`:
+
+- [Arquitetura Geral](docs/ARCHITECTURE.md)
+- [Documentação do Backend](docs/BACKEND.md)
+- [Documentação do Frontend](docs/FRONTEND.md)

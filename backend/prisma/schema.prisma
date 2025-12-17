@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,61 +7,47 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ========================================
-// ENUMS
-// ========================================
-
-enum Sector {
-  CONFEITARIA
-  PAES
-  SALGADO
-  PAO_DE_QUEIJO
-  EMBALADORA
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  LIDER_PRODUCAO
+  ESPECTADOR
 }
-
-enum Unit {
-  KG
-  UND
-}
-
-enum LossType {
-  MASSA
-  EMBALAGEM
-  INSUMO
-}
-
-enum ErrorCategory {
-  OPERACIONAL
-  EQUIPAMENTO
-  MATERIAL
-  QUALIDADE
-}
-
-enum MaintenanceStatus {
-  EM_ABERTO
-  FECHADO
-}
-
-enum AbsenceType {
-  ATESTADO
-  FALTA_INJUSTIFICADA
-  BANCO_DE_HORAS
-}
-
-// ========================================
-// MODELS
-// ========================================
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String   // Hash bcrypt
-  name      String
-  role      String   @default("user") // admin, user
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                  Int                  @id @default(autoincrement())
+  email               String               @unique
+  password            String
+  name                String
+  role                UserRole             @default(ESPECTADOR)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  passwordResetTokens PasswordResetToken[]
+  refreshTokens       RefreshToken[]
 
   @@map("users")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
 }
 
 model Employee {
@@ -109,7 +92,7 @@ model ProductionSpeed {
   sector          Sector
   produto         String
   metaMes         Float
-  dailyProduction Json     // Array de {programado, realizado}
+  dailyProduction Json
   totalProgramado Float
   totalRealizado  Float
   velocidade      Float
@@ -144,6 +127,7 @@ model Error {
   action      String?
   category    ErrorCategory
   cost        Float
+  wastedQty   Float?        @map("wasted_qty")
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -180,4 +164,41 @@ model Absenteeism {
   updatedAt    DateTime    @updatedAt
 
   @@map("absenteeism")
+}
+
+enum Sector {
+  CONFEITARIA
+  PAES
+  SALGADO
+  PAO_DE_QUEIJO
+  EMBALADORA
+}
+
+enum Unit {
+  KG
+  UND
+}
+
+enum LossType {
+  MASSA
+  EMBALAGEM
+  INSUMO
+}
+
+enum ErrorCategory {
+  OPERACIONAL
+  EQUIPAMENTO
+  MATERIAL
+  QUALIDADE
+}
+
+enum MaintenanceStatus {
+  EM_ABERTO
+  FECHADO
+}
+
+enum AbsenceType {
+  ATESTADO
+  FALTA_INJUSTIFICADA
+  BANCO_DE_HORAS
 }

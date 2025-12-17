@@ -53,6 +53,72 @@ try {
     process.exit(1);
 }
 
+// ========================================
+// VALIDAÇÃO DE SECRETS PROIBIDOS
+// ========================================
+
+/**
+ * Lista de strings proibidas em secrets de produção
+ * Previne uso de valores padrão do .env.example
+ */
+const FORBIDDEN_SECRET_PATTERNS = [
+    'sua_chave_secreta',
+    'dev_jwt_secret',
+    'dev_refresh_secret',
+    'imac_password',
+    'imac_user',
+    'change_in_production',
+    'example',
+    'test',
+    'senha',
+    'password123',
+];
+
+/**
+ * Valida se secrets contêm valores proibidos
+ * @throws {Error} Se secret proibido for detectado
+ */
+function validateSecrets() {
+    const secretsToCheck = [
+        { name: 'JWT_SECRET', value: env.JWT_SECRET },
+        { name: 'JWT_REFRESH_SECRET', value: env.JWT_REFRESH_SECRET },
+        { name: 'DATABASE_URL', value: env.DATABASE_URL },
+    ];
+
+    for (const { name, value } of secretsToCheck) {
+        const lowerValue = value.toLowerCase();
+        
+        for (const forbidden of FORBIDDEN_SECRET_PATTERNS) {
+            if (lowerValue.includes(forbidden.toLowerCase())) {
+                console.error(`\n🚨 ERRO DE SEGURANÇA CRÍTICO 🚨`);
+                console.error(`❌ Secret padrão detectado em ${name}!`);
+                console.error(`❌ Valor contém: "${forbidden}"`);
+                console.error(`\n⚠️  NUNCA use valores de exemplo em produção!`);
+                console.error(`⚠️  Gere secrets fortes e únicos.\n`);
+                throw new Error(`SECRET PADRÃO DETECTADO: ${name}`);
+            }
+        }
+    }
+
+    // Validação adicional: secrets devem ser diferentes entre si
+    if (env.JWT_SECRET === env.JWT_REFRESH_SECRET) {
+        console.error(`\n🚨 ERRO DE SEGURANÇA 🚨`);
+        console.error(`❌ JWT_SECRET e JWT_REFRESH_SECRET devem ser diferentes!\n`);
+        throw new Error('Secrets duplicados detectados');
+    }
+}
+
+// Executar validação de secrets (apenas em produção)
+if (env.NODE_ENV === 'production') {
+    try {
+        validateSecrets();
+        console.log('✅ Validação de secrets: APROVADO');
+    } catch (error) {
+        console.error(error.message);
+        process.exit(1);
+    }
+}
+
 export const config = {
     env: env.NODE_ENV,
     isDevelopment: env.NODE_ENV === 'development',
