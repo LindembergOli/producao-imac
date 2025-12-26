@@ -1,20 +1,20 @@
 # .gitignore
 
-# Dependencies
+# Dependências
 node_modules
 .pnp
 .pnp.js
 
-# Testing
+# Testes
 coverage
 .nyc_output
 
-# Production
+# Produção
 build
 dist
 out
 
-# Misc
+# Diversos
 .DS_Store
 .env
 .env.local
@@ -33,7 +33,7 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# Editor directories and files
+# Diretórios e arquivos de editor
 .idea
 .vscode
 *.suo
@@ -45,13 +45,13 @@ lerna-debug.log*
 # Docker
 docker-compose.override.yml
 
-# Backend specific
+# Específico do Backend
 backend/dist
 backend/node_modules
 backend/coverage
 backend/.env
 
-# Frontend specific
+# Específico do Frontend
 frontend/dist
 frontend/node_modules
 frontend/coverage
@@ -59,4 +59,5 @@ frontend/.env
 frontend/.eslintcache
 
 # Prisma
-# Keep migrations, but exclude client generation if in default location (usually inside node_modules)
+# Manter migrações, mas excluir geração do cliente se estiver no local padrão
+
