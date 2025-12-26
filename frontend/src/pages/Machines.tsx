@@ -45,7 +45,7 @@ const MachineForm: React.FC<{
                     className={inputClass}
                 >
                     <option value="" disabled>Selecione o setor</option>
-                    {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                    {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
             </div>
             <div>
@@ -96,16 +96,44 @@ interface MachinesProps {
 }
 
 const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
+    const { user, canCreate, canEdit, canDelete, isEspectador } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentMachine, setCurrentMachine] = useState<Machine | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
-    const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
+    // Estado dos filtros
+    const [filters, setFilters] = useState({
+        sector: '',
+        name: '',
+        code: ''
+    });
 
-    const sortedMachines = useMemo(() => {
-        if (!Array.isArray(machines)) return [];
-        return [...machines].sort((a, b) => a.sector.localeCompare(b.sector));
-    }, [machines]);
+    const filteredAndSortedMachines = useMemo(() => {
+        if (!machines || !Array.isArray(machines)) return [];
+
+        let filtered = [...machines];
+
+        // Aplicar filtros
+        if (filters.sector) {
+            filtered = filtered.filter(m => m.sector === filters.sector);
+        }
+        if (filters.name) {
+            filtered = filtered.filter(m =>
+                m.name.toLowerCase().includes(filters.name.toLowerCase())
+            );
+        }
+        if (filters.code) {
+            filtered = filtered.filter(m =>
+                m.code.toLowerCase().includes(filters.code.toLowerCase())
+            );
+        }
+
+        return filtered.sort((a, b) => a.sector.localeCompare(b.sector));
+    }, [machines, filters]);
+
+    const clearFilters = () => {
+        setFilters({ sector: '', name: '', code: '' });
+    };
 
     const handleOpenModal = (machine?: Machine) => {
         setCurrentMachine(machine || null);
@@ -120,11 +148,18 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
     const handleSave = async (machineData: Omit<Machine, 'id'>) => {
         const currentMachines = Array.isArray(machines) ? machines : [];
         try {
+            // Converter campos de texto para maiúsculas
+            const normalizedData = {
+                ...machineData,
+                name: machineData.name.toUpperCase(),
+                code: machineData.code.toUpperCase()
+            };
+
             if (currentMachine) {
-                const updated = await machinesService.update(currentMachine.id, machineData);
+                const updated = await machinesService.update(currentMachine.id, normalizedData);
                 setMachines(currentMachines.map(m => m.id === currentMachine.id ? updated : m));
             } else {
-                const created = await machinesService.create(machineData);
+                const created = await machinesService.create(normalizedData);
                 setMachines([...currentMachines, created]);
             }
             handleCloseModal();
@@ -157,7 +192,7 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removed
+        // const XLSX = (window as any).XLSX; // Removido
         const dataToExport = machines.map(({ sector, name, code }) => ({
             Setor: sector,
             'Nome do Equipamento': name,
@@ -174,7 +209,7 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removed
+        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Máquinas", 14, 16);
         autoTable(doc, {
@@ -215,10 +250,68 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
                 </div>
             </header>
 
+            {/* Filter Bar */}
+            <div className="bg-gray-50 dark:bg-slate-700/30 p-4 rounded-lg shadow-md dark:shadow-lg border border-slate-200/30 dark:border-slate-600/30">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Sector Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Setor
+                        </label>
+                        <select
+                            value={filters.sector}
+                            onChange={(e) => setFilters({ ...filters, sector: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        >
+                            <option value="">Todos os setores</option>
+                            {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Name Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Nome do Equipamento
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome..."
+                            value={filters.name}
+                            onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+
+                    {/* Code Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Código
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Buscar por código..."
+                            value={filters.code}
+                            onChange={(e) => setFilters({ ...filters, code: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+
+                    {/* Clear Filters Button */}
+                    <div className="flex items-end">
+                        <button
+                            onClick={clearFilters}
+                            className="w-full bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors text-sm font-medium"
+                        >
+                            Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <main className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md transition-colors">
                 <h2 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary flex items-center mb-6">
                     <Cpu size={22} className="mr-3 text-imac-primary dark:text-imac-secondary" />
-                    Lista de Máquinas
+                    Lista de Máquinas ({filteredAndSortedMachines.length})
                 </h2>
 
                 <div className="overflow-x-auto">
@@ -233,12 +326,15 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
 
                         {/* Body */}
                         <div className="mt-2">
-                            {sortedMachines.length === 0 ? (
+                            {filteredAndSortedMachines.length === 0 ? (
                                 <div className="text-center py-16 text-gray-400">
-                                    Nenhuma máquina cadastrada
+                                    <div className="flex flex-col items-center justify-center">
+                                        <Cpu size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
+                                        <p>{filters.sector || filters.name || filters.code ? 'Nenhuma máquina encontrada com os filtros aplicados' : 'Nenhuma máquina cadastrada'}</p>
+                                    </div>
                                 </div>
                             ) : (
-                                sortedMachines.map((mac) => (
+                                filteredAndSortedMachines.map((mac) => (
                                     <div key={mac.id} className="grid grid-cols-10 gap-4 items-center px-4 py-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                                         <div className="col-span-3 text-gray-600 dark:text-gray-300">{mac.sector}</div>
                                         <div className="col-span-4 font-medium text-gray-800 dark:text-gray-100">{mac.name}</div>

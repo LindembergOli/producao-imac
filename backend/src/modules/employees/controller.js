@@ -14,6 +14,7 @@
 
 import * as employeeService from './service.js';
 import { success } from '../../utils/responses.js';
+import { logAudit } from '../../middlewares/audit.js';
 
 /**
  * GET /api/employees
@@ -74,6 +75,18 @@ export const getStats = async (req, res, next) => {
 export const create = async (req, res, next) => {
     try {
         const employee = await employeeService.create(req.body);
+
+        // Auditar criação
+        await logAudit({
+            userId: req.user?.id,
+            action: 'CREATE_RECORD',
+            entity: 'Employee',
+            entityId: employee.id,
+            details: { ...req.body },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+
         return success(res, {
             data: employee,
             message: 'Funcionário criado com sucesso',
@@ -91,6 +104,18 @@ export const create = async (req, res, next) => {
 export const update = async (req, res, next) => {
     try {
         const employee = await employeeService.update(req.params.id, req.body);
+
+        // Auditar atualização
+        await logAudit({
+            userId: req.user?.id,
+            action: 'UPDATE_RECORD',
+            entity: 'Employee',
+            entityId: parseInt(req.params.id),
+            details: { ...req.body },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+
         return success(res, {
             data: employee,
             message: 'Funcionário atualizado com sucesso',
@@ -106,7 +131,27 @@ export const update = async (req, res, next) => {
  */
 export const remove = async (req, res, next) => {
     try {
+        // Buscar funcionário antes de deletar para registrar detalhes
+        const employee = await employeeService.getById(req.params.id);
+
         await employeeService.remove(req.params.id);
+
+        // Auditar deleção com detalhes
+        await logAudit({
+            userId: req.user?.id,
+            action: 'DELETE_RECORD',
+            entity: 'Employee',
+            entityId: parseInt(req.params.id),
+            details: {
+                name: employee.name,
+                sector: employee.sector,
+                position: employee.position,
+                cpf: employee.cpf,
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+
         return success(res, {
             data: null,
             message: 'Funcionário deletado com sucesso',

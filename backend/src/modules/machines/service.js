@@ -15,18 +15,37 @@
 import prisma from '../../config/database.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 import logger from '../../utils/logger.js';
+import { paginate, createPaginatedResponse } from '../../utils/pagination.js';
+import { getCached, invalidateCachePattern } from '../../utils/cache.js';
 
 /**
  * Lista todas as máquinas
  * 
  * @returns {Promise<Array>} Lista de máquinas
  */
-export const getAll = async () => {
-    return await prisma.machine.findMany({
-        orderBy: [
-            { sector: 'asc' },
-            { name: 'asc' }
-        ],
+/**
+ * Lista todas as máquinas com paginação e cache
+ */
+export const getAll = async (page = 1, limit = 20) => {
+    const cacheKey = `machines:all:${page}:${limit}`;
+
+    return getCached(cacheKey, 60000, async () => {
+        const { skip, take } = paginate(page, limit);
+
+        const [data, total] = await Promise.all([
+            prisma.machine.findMany({
+                where: { deletedAt: null },
+                skip,
+                take,
+                orderBy: [
+                    { sector: 'asc' },
+                    { name: 'asc' }
+                ],
+            }),
+            prisma.machine.count({ where: { deletedAt: null } })
+        ]);
+
+        return createPaginatedResponse(data, page, limit, total);
     });
 };
 
@@ -42,7 +61,7 @@ export const getById = async (id) => {
         where: { id: parseInt(id) },
     });
 
-    if (!machine) {
+    if (!machine || machine.deletedAt) {
         throw new AppError('Máquina não encontrada', 404);
     }
 
@@ -76,7 +95,10 @@ export const getByCode = async (code) => {
  */
 export const getBySector = async (sector) => {
     return await prisma.machine.findMany({
-        where: { sector },
+        where: {
+            sector,
+            deletedAt: null // Filtrar deletados
+        },
         orderBy: { name: 'asc' },
     });
 };

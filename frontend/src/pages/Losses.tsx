@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { LossRecord, Product } from '../types';
+import type { LossRecord, Product, Supply } from '../types';
 import { Sector, LossType, Unit } from '../types';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart as RechartsLineChart, Line, ComposedChart } from 'recharts';
@@ -12,6 +12,8 @@ import Modal, { ConfirmModal } from '../components/Modal';
 import DatePickerInput from '../components/DatePickerInput';
 import { useAuth } from '../contexts/AuthContext';
 import { lossesService } from '../services/modules/losses';
+import { formatBrazilianNumber } from '../utils/formatters';
+import { suppliesService } from '../services/modules/supplies';
 
 const COLORS = {
     primary: '#D99B61',
@@ -48,21 +50,45 @@ const LossRecordForm: React.FC<{
     });
     const [totalCost, setTotalCost] = useState(record?.totalCost || 0);
     const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+    const [availableSupplies, setAvailableSupplies] = useState<Supply[]>([]);
 
-    // Helper to normalize strings
+    // Função auxiliar para normalizar strings
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
+    // Carregar produtos ou supplies baseado no setor e tipo de perda
     useEffect(() => {
-        if (formData.sector) {
-            const filteredProducts = products.filter(p => normalize(String(p.sector)) === normalize(String(formData.sector)));
-            setAvailableProducts(filteredProducts);
-            if (record?.sector !== formData.sector) {
-                setFormData(f => ({ ...f, product: '', unitCost: '', unit: Unit.KG }));
+        const loadItems = async () => {
+            if (formData.sector) {
+                // Se tipo de perda for SUPPLY, carregar supplies
+                if (formData.lossType === LossType.INSUMO) {
+                    try {
+                        const allSupplies = await suppliesService.getAll();
+                        const filteredSupplies = allSupplies.filter(s => normalize(String(s.sector)) === normalize(String(formData.sector)));
+                        setAvailableSupplies(filteredSupplies);
+                        setAvailableProducts([]);
+                    } catch (error) {
+                        console.error('Erro ao carregar supplies:', error);
+                        setAvailableSupplies([]);
+                    }
+                } else {
+                    // Caso contrário, carregar produtos
+                    const filteredProducts = products.filter(p => normalize(String(p.sector)) === normalize(String(formData.sector)));
+                    setAvailableProducts(filteredProducts);
+                    setAvailableSupplies([]);
+                }
+
+                // Resetar produto se mudou setor ou tipo
+                if (record?.sector !== formData.sector || record?.lossType !== formData.lossType) {
+                    setFormData(f => ({ ...f, product: '', unitCost: '', unit: Unit.KG }));
+                }
+            } else {
+                setAvailableProducts([]);
+                setAvailableSupplies([]);
             }
-        } else {
-            setAvailableProducts([]);
-        }
-    }, [formData.sector, record?.sector, products]);
+        };
+
+        loadItems();
+    }, [formData.sector, formData.lossType, record?.sector, record?.lossType, products]);
 
     useEffect(() => {
         const qty = parseFloat(String(formData.quantity).replace(',', '.') || '0');
@@ -71,23 +97,37 @@ const LossRecordForm: React.FC<{
     }, [formData.quantity, formData.unitCost]);
 
     const handleProductChange = (productName: string) => {
-        const selectedProduct = availableProducts.find(p => p.name === productName);
+        // Determinar se estamos lidando com produto ou supply
+        const isSupply = formData.lossType === LossType.INSUMO;
 
-        let calculatedUnitCost = 0;
+        if (isSupply) {
+            const selectedSupply = availableSupplies.find(s => s.name === productName);
+            const unitCost = selectedSupply?.unitCost || 0;
 
-        // Lógica de cálculo: Custo da Receita / Rendimento
-        if (selectedProduct) {
-            const recipeCost = selectedProduct.unit_cost || 0;
-            const productYield = selectedProduct.yield && selectedProduct.yield > 0 ? selectedProduct.yield : 1;
-            calculatedUnitCost = recipeCost / productYield;
+            setFormData({
+                ...formData,
+                product: productName,
+                unit: selectedSupply?.unit || Unit.KG,
+                unitCost: unitCost > 0 ? unitCost.toFixed(4).replace('.', ',') : '',
+            });
+        } else {
+            const selectedProduct = availableProducts.find(p => p.name === productName);
+            let calculatedUnitCost = 0;
+
+            // Lógica de cálculo: Custo da Receita / Rendimento
+            if (selectedProduct) {
+                const recipeCost = selectedProduct.unitCost || 0;
+                const productYield = selectedProduct.yield && selectedProduct.yield > 0 ? selectedProduct.yield : 1;
+                calculatedUnitCost = recipeCost / productYield;
+            }
+
+            setFormData({
+                ...formData,
+                product: productName,
+                unit: selectedProduct?.unit || Unit.KG,
+                unitCost: calculatedUnitCost > 0 ? calculatedUnitCost.toFixed(4).replace('.', ',') : '',
+            });
         }
-
-        setFormData({
-            ...formData,
-            product: productName,
-            unit: selectedProduct?.unit || Unit.KG,
-            unitCost: calculatedUnitCost > 0 ? calculatedUnitCost.toFixed(4).replace('.', ',') : '',
-        });
     };
 
     const handleSave = () => {
@@ -115,7 +155,7 @@ const LossRecordForm: React.FC<{
         <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium mb-1 dark:text-gray-300">Data</label><DatePickerInput value={formData.date || ''} onChange={date => setFormData({ ...formData, date })} /></div>
-                <div><label className="block text-sm font-medium mb-1 dark:text-gray-300">Setor</label><select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass} required><option value="">Selecione</option>{Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                <div><label className="block text-sm font-medium mb-1 dark:text-gray-300">Setor</label><select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass} required><option value="">Selecione</option>{Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -126,10 +166,24 @@ const LossRecordForm: React.FC<{
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Produto *</label>
-                    <select value={formData.product} onChange={e => handleProductChange(e.target.value)} disabled={!formData.sector} className={`${inputClass} disabled:bg-gray-100 dark:disabled:bg-slate-800`}>
-                        <option value="">{formData.sector ? 'Selecione' : 'Selecione um setor primeiro'}</option>
-                        {availableProducts.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {formData.lossType === LossType.INSUMO ? 'Nome do Insumo *' : 'Nome do Produto *'}
+                    </label>
+                    <select
+                        value={formData.product}
+                        onChange={e => handleProductChange(e.target.value)}
+                        disabled={!formData.sector || !formData.lossType}
+                        className={`${inputClass} disabled:bg-gray-100 dark:disabled:bg-slate-800`}
+                    >
+                        <option value="">
+                            {!formData.sector ? 'Selecione um setor primeiro' :
+                                !formData.lossType ? 'Selecione o tipo de perda primeiro' :
+                                    'Selecione'}
+                        </option>
+                        {formData.lossType === LossType.INSUMO
+                            ? availableSupplies.map(s => <option key={s.id} value={s.name}>{s.name}</option>)
+                            : availableProducts.map(p => <option key={p.id} value={p.name}>{p.name}</option>)
+                        }
                     </select>
                 </div>
                 <div>
@@ -174,13 +228,14 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     const [currentRecord, setCurrentRecord] = useState<LossRecord | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
-    // Filters for Overview
+
+    // Filtros para Visão Geral
     const [overviewFilters, setOverviewFilters] = useState({
         start: '',
         end: ''
     });
 
-    // Filters for Table
+    // Filtros para Tabela
     const [tableFilters, setTableFilters] = useState({
         mesAno: '',
         sector: 'Todos',
@@ -189,7 +244,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
 
     const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
-    // Chart styling constants
+    // Constantes de estilo de gráficos
     const gridColor = isDarkMode ? '#334155' : '#e5e7eb';
     const tickColor = isDarkMode ? '#9ca3af' : '#6b7280';
     const tooltipStyle = useMemo(() => ({
@@ -201,13 +256,13 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     }), [isDarkMode]);
 
     const xAxisProps = useMemo(() => ({
-        tick: { fill: tickColor, fontSize: 9 },
+        tick: { fill: tickColor, fontSize: 11 },
         axisLine: false,
         tickLine: false,
         interval: 0,
-        angle: -45,
-        textAnchor: 'end' as const,
-        height: 70
+        angle: 0,
+        textAnchor: 'middle' as const,
+        height: 50
     }), [tickColor]);
 
     const filteredOverviewRecords = useMemo(() => {
@@ -229,13 +284,17 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
 
     const filteredTableRecords = useMemo(() => {
         if (!Array.isArray(records)) return [];
+
+        // Função auxiliar para normalizar strings para comparação
+        const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
         return records.filter(rec => {
             if (tableFilters.mesAno) {
                 const [y, m] = tableFilters.mesAno.split('-').map(Number);
                 const recDate = new Date(rec.date);
                 if (recDate.getMonth() + 1 !== m || recDate.getFullYear() !== y) return false;
             }
-            if (tableFilters.sector !== 'Todos' && rec.sector !== tableFilters.sector) return false;
+            if (tableFilters.sector !== 'Todos' && normalize(String(rec.sector)) !== normalize(tableFilters.sector)) return false;
             if (tableFilters.type !== 'Todos' && rec.lossType !== tableFilters.type) return false;
             return true;
         }).sort((a, b) => a.sector.localeCompare(b.sector));
@@ -264,7 +323,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     }, [filteredOverviewRecords]);
 
     const chartData = useMemo(() => {
-        const sectors = Object.values(Sector);
+        const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
         const dataBySector = filteredOverviewRecords.reduce((acc, rec) => {
             if (!acc[rec.sector]) {
                 acc[rec.sector] = {
@@ -312,11 +371,17 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     const handleSave = async (data: Omit<LossRecord, 'id'>) => {
         if (!Array.isArray(records)) return;
         try {
+            // Converter campos de texto para maiúsculas
+            const normalizedData = {
+                ...data,
+                product: data.product.toUpperCase()
+            };
+
             if (currentRecord) {
-                const updated = await lossesService.update(currentRecord.id, data);
+                const updated = await lossesService.update(currentRecord.id, normalizedData);
                 setRecords(records.map(r => r.id === currentRecord.id ? updated : r));
             } else {
-                const created = await lossesService.create(data);
+                const created = await lossesService.create(normalizedData);
                 setRecords([...records, created]);
             }
             handleCloseModal();
@@ -351,7 +416,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removed
+        // const XLSX = (window as any).XLSX; // Removido
         const dataToExport = filteredTableRecords.map(r => ({
             'Data': new Date(r.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
             'Setor': r.sector,
@@ -372,7 +437,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removed
+        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Perdas de Produção", 14, 16);
         autoTable(doc, {
@@ -392,7 +457,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
 
     const renderOverview = () => (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <DatePickerInput
@@ -409,14 +474,28 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                         />
                     </div>
                 </div>
+                {(overviewFilters.start || overviewFilters.end) && (
+                    <div className="mt-4 flex justify-end">
+                        <button
+                            onClick={() => setOverviewFilters({ start: '', end: '' })}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                            🔄 Limpar Filtros
+                        </button>
+                    </div>
+                )}
+                <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Filter size={16} className="text-imac-primary" />
+                    <span>Mostrando <span className="font-semibold text-imac-primary">{filteredOverviewRecords.length}</span> de <span className="font-semibold">{records.length}</span> registros</span>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                <KpiCard title="Total de Perdas (KG)" value={kpiData.totalLossKg.toFixed(1)} unit="KG" icon={<TrendingDown />} color={COLORS.error} />
-                <KpiCard title="Custo Total" value={kpiData.totalCost.toFixed(2)} unit="R$" icon={<DollarSign />} color={COLORS.tertiary} />
-                <KpiCard title="Perda de Massa" value={kpiData.lossMassa.toFixed(1)} unit="KG" icon={<Wheat />} color="#EAB308" />
-                <KpiCard title="Perda de Embalagem" value={kpiData.lossEmbalagem.toFixed(0)} unit="KG" icon={<Package />} color="#3B82F6" />
-                <KpiCard title="Perda de Insumo" value={kpiData.lossInsumo.toFixed(1)} unit="KG" icon={<Layers />} color="#A855F7" />
+                <KpiCard title="Total de Perdas (KG)" value={formatBrazilianNumber(kpiData.totalLossKg, 1)} unit="KG" icon={<TrendingDown />} color={COLORS.error} />
+                <KpiCard title="Custo Total" value={formatBrazilianNumber(kpiData.totalCost, 2)} unit="R$" icon={<DollarSign />} color={COLORS.tertiary} />
+                <KpiCard title="Perda de Massa" value={formatBrazilianNumber(kpiData.lossMassa, 1)} unit="KG" icon={<Wheat />} color="#EAB308" />
+                <KpiCard title="Perda de Embalagem" value={formatBrazilianNumber(kpiData.lossEmbalagem, 0)} unit="KG" icon={<Package />} color="#3B82F6" />
+                <KpiCard title="Perda de Insumo" value={formatBrazilianNumber(kpiData.lossInsumo, 1)} unit="KG" icon={<Layers />} color="#A855F7" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -446,7 +525,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                                 dataKey="name"
                                 {...xAxisProps}
                             />
-                            <YAxis tick={{ fill: tickColor }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value) => `${value} KG`} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
                             <Bar dataKey="Massa (KG)" fill={COLORS.primary} barSize={30} radius={[4, 4, 0, 0]} />
@@ -462,7 +541,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                                 dataKey="name"
                                 {...xAxisProps}
                             />
-                            <YAxis tick={{ fill: tickColor }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value) => `${value} KG`} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
                             <Bar dataKey="Embalagem (KG)" fill={COLORS.secondary} barSize={30} radius={[4, 4, 0, 0]} />
@@ -478,7 +557,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                                 dataKey="name"
                                 {...xAxisProps}
                             />
-                            <YAxis tick={{ fill: tickColor }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value) => `${value} KG`} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
                             <Bar dataKey="Insumo (KG)" fill={COLORS.tertiary} barSize={30} radius={[4, 4, 0, 0]} />
@@ -508,7 +587,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                 )}
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm space-y-4 no-print transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Mês/Ano</label>
@@ -526,7 +605,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                             className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
                         >
                             <option value="Todos">Todos</option>
-                            {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                            {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>
@@ -543,7 +622,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><TrendingUp size={20} />Registros de Perdas</h3>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">

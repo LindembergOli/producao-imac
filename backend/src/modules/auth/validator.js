@@ -15,6 +15,7 @@
  */
 
 import { z } from 'zod';
+import { strongPasswordSchema } from '../../utils/passwordValidator.js';
 
 /**
  * Schema para validação de email
@@ -30,16 +31,17 @@ const emailSchema = z
     .trim();
 
 /**
- * Schema para validação de senha
- * Mínimo 6 caracteres
+ * Schema para validação de senha forte
+ * 
+ * Requisitos:
+ * - Mínimo 8 caracteres
+ * - Pelo menos 1 letra maiúscula
+ * - Pelo menos 1 letra minúscula
+ * - Pelo menos 1 número
+ * - Pelo menos 1 caractere especial
+ * - Não pode ser senha comum
  */
-const passwordSchema = z
-    .string({
-        required_error: 'Senha é obrigatória',
-        invalid_type_error: 'Senha deve ser uma string',
-    })
-    .min(6, 'Senha deve ter no mínimo 6 caracteres')
-    .max(100, 'Senha muito longa');
+const passwordSchema = strongPasswordSchema;
 
 /**
  * Schema para validação de nome

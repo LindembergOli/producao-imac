@@ -11,13 +11,15 @@ import Maintenance from './pages/Maintenance';
 import Absenteeism from './pages/Absenteeism';
 import Employees from './pages/Employees';
 import Products from './pages/Products';
+import Supplies from './pages/Supplies';
 import Machines from './pages/Machines';
 import Users from './pages/Users';
-import type { Page, Employee, Product, Machine, ProductionSpeedRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord } from './types';
+import type { Page, Employee, Product, Supply, Machine, ProductionSpeedRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord } from './types';
 
 // Services
 import { employeesService } from './services/modules/employees';
 import { productsService } from './services/modules/products';
+import { suppliesService } from './services/modules/supplies';
 import { machinesService } from './services/modules/machines';
 import { productionService } from './services/modules/production';
 import { lossesService } from './services/modules/losses';
@@ -56,6 +58,7 @@ const App: React.FC = () => {
   // Estados dos dados (agora vazios inicialmente, populados via API)
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [supplies, setSupplies] = useState<Supply[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [speedRecords, setSpeedRecords] = useState<ProductionSpeedRecord[]>([]);
   const [lossRecords, setLossRecords] = useState<LossRecord[]>([]);
@@ -81,10 +84,11 @@ const App: React.FC = () => {
     try {
       setDataLoading(true);
       const [
-        emps, prods, machs, speeds, losses, errors, maint, absent
+        emps, prods, supps, machs, speeds, losses, errors, maint, absent
       ] = await Promise.all([
         employeesService.getAll(),
         productsService.getAll(),
+        suppliesService.getAll(),
         machinesService.getAll(),
         productionService.getAll(),
         lossesService.getAll(),
@@ -93,8 +97,10 @@ const App: React.FC = () => {
         absenteeismService.getAll()
       ]);
 
+
       setEmployees(emps);
       setProducts(prods);
+      setSupplies(supps);
       setMachines(machs);
       setSpeedRecords(speeds);
       setLossRecords(losses);
@@ -152,13 +158,15 @@ const App: React.FC = () => {
       case 'Erros':
         return <Errors products={products} records={errorRecords} setRecords={setErrorRecords} isDarkMode={isDarkMode} />;
       case 'Manutenção':
-        return <Maintenance machines={machines} records={maintenanceRecords} setRecords={setMaintenanceRecords} isDarkMode={isDarkMode} />;
+        return <Maintenance machines={machines} employees={employees} records={maintenanceRecords} setRecords={setMaintenanceRecords} isDarkMode={isDarkMode} />;
       case 'Absenteísmo':
         return <Absenteeism employees={employees} records={absenteeismRecords} setRecords={setAbsenteeismRecords} isDarkMode={isDarkMode} />;
       case 'Funcionários':
         return <Employees employees={employees} setEmployees={setEmployees} />;
       case 'Produtos':
         return <Products products={products} setProducts={setProducts} />;
+      case 'Insumos':
+        return <Supplies supplies={supplies} setSupplies={setSupplies} />;
       case 'Máquinas':
         return <Machines machines={machines} setMachines={setMachines} />;
       case 'Usuários':

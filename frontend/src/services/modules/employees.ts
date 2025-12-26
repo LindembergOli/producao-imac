@@ -7,13 +7,15 @@
 
 import api from '../api';
 import { Employee, Sector } from '../../types';
+import { extractData } from '../helpers';
 
 const sectorMap: Record<string, Sector> = {
     'CONFEITARIA': Sector.CONFEITARIA,
     'PAES': Sector.PAES,
     'SALGADO': Sector.SALGADO,
     'PAO_DE_QUEIJO': Sector.PAO_DE_QUEIJO,
-    'EMBALADORA': Sector.EMBALADORA
+    'EMBALADORA': Sector.EMBALADORA,
+    'MANUTENCAO': Sector.MANUTENCAO
 };
 
 const transformRecord = (record: any): Employee => {
@@ -37,7 +39,8 @@ export const employeesService = {
      */
     getAll: async (): Promise<Employee[]> => {
         const response = await api.get('/employees');
-        return response.data.data.map(transformRecord);
+        const data = extractData<any>(response.data);
+        return data.map(transformRecord);
     },
 
     /**
@@ -57,17 +60,15 @@ export const employeesService = {
     },
 
     /**
-     * Retorna estatísticas de funcionários
+     * Busca estatísticas de funcionários
      */
     getStats: async (): Promise<EmployeeStats> => {
         const response = await api.get('/employees/stats');
-        // Stats might use keys like 'PAES', but we don't usually map stats keys unless UI uses them directly as enums
-        // Assuming stats are just counts
         return response.data.data;
     },
 
     /**
-     * Cria um novo funcionário
+     * Cria novo funcionário
      */
     create: async (data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<Employee> => {
         const response = await api.post('/employees', data);
@@ -75,7 +76,7 @@ export const employeesService = {
     },
 
     /**
-     * Atualiza um funcionário existente
+     * Atualiza funcionário existente
      */
     update: async (id: number, data: Partial<Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Employee> => {
         const response = await api.put(`/employees/${id}`, data);
@@ -83,7 +84,7 @@ export const employeesService = {
     },
 
     /**
-     * Deleta um funcionário
+     * Remove funcionário
      */
     delete: async (id: number): Promise<void> => {
         await api.delete(`/employees/${id}`);

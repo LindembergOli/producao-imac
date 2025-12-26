@@ -20,12 +20,19 @@ const ProductForm: React.FC<{
     onSave: (product: Omit<Product, 'id'>) => void;
     onCancel: () => void;
 }> = ({ product, onSave, onCancel }) => {
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        name: string;
+        sector: Sector | '';
+        unit: Unit | '';
+        yield?: number;
+        unitCost?: number;
+        notes?: string;
+    }>({
         name: product?.name || '',
         sector: product?.sector || '',
         unit: product?.unit || Unit.KG,
-        yield: product?.yield || 0,
-        unit_cost: product?.unit_cost || 0,
+        yield: product?.yield,
+        unitCost: product?.unitCost,
         notes: product?.notes || '',
     });
 
@@ -56,7 +63,7 @@ const ProductForm: React.FC<{
                         className={inputClass}
                     >
                         <option value="" disabled>Selecione o setor</option>
-                        {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                        {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div className="md:col-span-2">
@@ -102,16 +109,15 @@ const ProductForm: React.FC<{
                     />
                 </div>
                 <div className="md:col-span-2">
-                    <label htmlFor="unit_cost" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Custo por Receita (R$)</label>
+                    <label htmlFor="unitCost" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Custo por Receita (R$)</label>
                     <input
                         type="number"
                         step="0.01"
-                        name="unit_cost"
-                        id="unit_cost"
-                        placeholder="0.00"
-                        value={formData.unit_cost || ''}
+                        name="unitCost"
+                        id="unitCost"
+                        value={formData.unitCost || ''}
                         onFocus={e => e.target.select()}
-                        onChange={(e) => setFormData({ ...formData, unit_cost: e.target.value ? Number(e.target.value) : undefined })}
+                        onChange={(e) => setFormData({ ...formData, unitCost: e.target.value ? Number(e.target.value) : undefined })}
                         className={inputClass}
                     />
                 </div>
@@ -145,10 +151,33 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
     const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
-    const sortedProducts = useMemo(() => {
+    // Estado dos filtros
+    const [filters, setFilters] = useState({
+        sector: '',
+        name: ''
+    });
+
+    const filteredAndSortedProducts = useMemo(() => {
         if (!products || !Array.isArray(products)) return [];
-        return [...products].sort((a, b) => a.sector.localeCompare(b.sector));
-    }, [products]);
+
+        let filtered = [...products];
+
+        // Aplicar filtros
+        if (filters.sector) {
+            filtered = filtered.filter(p => p.sector === filters.sector);
+        }
+        if (filters.name) {
+            filtered = filtered.filter(p =>
+                p.name.toLowerCase().includes(filters.name.toLowerCase())
+            );
+        }
+
+        return filtered.sort((a, b) => a.sector.localeCompare(b.sector));
+    }, [products, filters]);
+
+    const clearFilters = () => {
+        setFilters({ sector: '', name: '' });
+    };
 
     const handleOpenModal = (product?: Product) => {
         setCurrentProduct(product || null);
@@ -163,11 +192,17 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
     const handleSave = async (productData: Omit<Product, 'id'>) => {
         const currentProducts = Array.isArray(products) ? products : [];
         try {
+            // Converter campos de texto para maiúsculas
+            const normalizedData = {
+                ...productData,
+                name: productData.name.toUpperCase()
+            };
+
             if (currentProduct) {
-                const updated = await productsService.update(currentProduct.id, productData);
+                const updated = await productsService.update(currentProduct.id, normalizedData);
                 setProducts(currentProducts.map(p => p.id === currentProduct.id ? updated : p));
             } else {
-                const created = await productsService.create(productData);
+                const created = await productsService.create(normalizedData);
                 setProducts([...currentProducts, created]);
             }
             handleCloseModal();
@@ -200,13 +235,13 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removed
-        const dataToExport = products.map(({ sector, name, unit, yield: rendimento, unit_cost, notes }) => ({
+        // const XLSX = (window as any).XLSX; // Removido
+        const dataToExport = products.map(({ sector, name, unit, yield: rendimento, unitCost, notes }) => ({
             Setor: sector,
             Nome: name,
             Unidade: unit,
             Rendimento: rendimento || '',
-            'Custo por Receita (R$)': unit_cost || 0,
+            'Custo por Receita (R$)': unitCost || 0,
             'Observacoes': notes || ''
         }));
         const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -220,7 +255,7 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removed
+        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Produtos", 14, 16);
         autoTable(doc, {
@@ -230,7 +265,7 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                 prod.name,
                 prod.unit,
                 prod.yield || '-',
-                prod.unit_cost ? prod.unit_cost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'
+                prod.unitCost ? prod.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'
             ]),
             startY: 20,
         });
@@ -261,10 +296,54 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                 </div>
             </header>
 
+            {/* Filter Bar */}
+            <div className="bg-gray-50 dark:bg-slate-700/30 p-4 rounded-lg shadow-md dark:shadow-lg border border-slate-200/30 dark:border-slate-600/30">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Sector Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Setor
+                        </label>
+                        <select
+                            value={filters.sector}
+                            onChange={(e) => setFilters({ ...filters, sector: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        >
+                            <option value="">Todos os setores</option>
+                            {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Name Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Nome
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome..."
+                            value={filters.name}
+                            onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+
+                    {/* Clear Filters Button */}
+                    <div className="flex items-end">
+                        <button
+                            onClick={clearFilters}
+                            className="w-full bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors text-sm font-medium"
+                        >
+                            Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <main className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md transition-colors">
                 <h2 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary flex items-center mb-6">
                     <Package size={22} className="mr-3 text-imac-primary dark:text-imac-secondary" />
-                    Lista de Produtos
+                    Lista de Produtos ({filteredAndSortedProducts.length})
                 </h2>
 
                 <div className="overflow-x-auto">
@@ -277,21 +356,24 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                             <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Custo por Receita</div>
                             <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-right no-print">Ações</div>
                         </div>
-
+                        {/* Body */}
                         <div className="mt-2">
-                            {sortedProducts.length === 0 ? (
+                            {filteredAndSortedProducts.length === 0 ? (
                                 <div className="text-center py-16 text-gray-400">
-                                    Nenhum produto cadastrado
+                                    <div className="flex flex-col items-center justify-center">
+                                        <Package size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
+                                        <p>{filters.sector || filters.name ? 'Nenhum produto encontrado com os filtros aplicados' : 'Nenhum produto cadastrado'}</p>
+                                    </div>
                                 </div>
                             ) : (
-                                sortedProducts.map((prod) => (
+                                filteredAndSortedProducts.map((prod) => (
                                     <div key={prod.id} className="grid grid-cols-12 gap-4 items-center px-4 py-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                                         <div className="col-span-3 text-gray-600 dark:text-gray-300">{prod.sector}</div>
                                         <div className="col-span-3 font-medium text-gray-800 dark:text-gray-100">{prod.name}</div>
                                         <div className="col-span-1 text-gray-600 dark:text-gray-400">{prod.unit}</div>
                                         <div className="col-span-2 text-gray-600 dark:text-gray-400">{prod.yield || '-'}</div>
                                         <div className="col-span-2 text-gray-600 dark:text-gray-400">
-                                            {prod.unit_cost ? prod.unit_cost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                            {prod.unitCost ? prod.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
                                         </div>
                                         <div className="col-span-1 flex justify-end items-center gap-2 no-print">
                                             <button type="button" onClick={() => handleOpenModal(prod)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${prod.name} `}>

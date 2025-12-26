@@ -1,15 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { MaintenanceRecord, Machine } from '../types';
+import type { MaintenanceRecord, Machine, Employee } from '../types';
 import { Sector, MaintenanceStatus } from '../types';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Wrench, TriangleAlert, Activity, TrendingUp, List, File, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Wrench, TriangleAlert, Activity, TrendingUp, List, File, Pencil, Trash2, Filter } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
 import DatePickerInput from '../components/DatePickerInput';
+import TimePickerInput from '../components/TimePickerInput';
 import { useAuth } from '../contexts/AuthContext';
 import { maintenanceService } from '../services/modules/maintenance';
 
@@ -21,19 +22,6 @@ const COLORS = {
     error: '#E74C3C',
     pie: ['#34D399', '#FBBF24', '#F87171', '#60A5FA', '#A78BFA'] // Emerald, Amber, Red, Blue, Violet
 };
-
-const generateTimeOptions = () => {
-    const options = [];
-    for (let h = 0; h < 24; h++) {
-        for (let m = 0; m < 60; m += 15) {
-            const hour = h.toString().padStart(2, '0');
-            const minute = m.toString().padStart(2, '0');
-            options.push(`${hour}:${minute}`);
-        }
-    }
-    return options;
-};
-const timeOptions = generateTimeOptions();
 
 // getMesAnoOptions removido pois agora usamos DatePickerInput com type="month"
 
@@ -75,12 +63,24 @@ const MaintenanceRecordForm: React.FC<{
     onSave: (record: Omit<MaintenanceRecord, 'id' | 'durationHours'>) => void;
     onCancel: () => void;
     machines: Machine[];
-}> = ({ record, onSave, onCancel, machines }) => {
+    employees: Employee[]; // Adicionado
+}> = ({ record, onSave, onCancel, machines, employees }) => {
+
+    // Função auxiliar para converter data para formato YYYY-MM-DD
+    const formatDateForInput = (date: string | Date | undefined): string => {
+        if (!date) {
+            const today = new Date();
+            return today.toISOString().split('T')[0]!;
+        }
+        const dateObj = typeof date === 'string' ? new Date(date) : date;
+        const result = dateObj.toISOString().split('T')[0];
+        return result || new Date().toISOString().split('T')[0]!;
+    };
 
     const [formData, setFormData] = useState({
-        date: record?.date || new Date().toISOString().split('T')[0],
-        sector: record?.sector || '',
-        machine: record?.machine || '',
+        date: formatDateForInput(record?.date),
+        sector: (record?.sector as string) || '',
+        machine: (record?.machine as string) || '',
         requester: record?.requester || '',
         technician: record?.technician || '',
         problem: record?.problem || '',
@@ -90,10 +90,32 @@ const MaintenanceRecordForm: React.FC<{
         status: record?.status || MaintenanceStatus.EM_ABERTO,
     });
     const [availableMachines, setAvailableMachines] = useState<Machine[]>([]);
+    const [availableRequesters, setAvailableRequesters] = useState<Employee[]>([]);
+    const [availableTechnicians, setAvailableTechnicians] = useState<Employee[]>([]);
     const [durationDisplay, setDurationDisplay] = useState('0h 0min');
 
-    // Helper to normalize strings
+    // Função auxiliar para normalizar strings
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+    // Filtrar solicitantes por setor selecionado
+    useEffect(() => {
+        if (formData.sector) {
+            const requesters = employees.filter(emp =>
+                normalize(String(emp.sector)) === normalize(String(formData.sector))
+            );
+            setAvailableRequesters(requesters);
+        } else {
+            setAvailableRequesters([]);
+        }
+    }, [formData.sector, employees]);
+
+    // Filtrar técnicos do setor Manutenção (VISÍVEL PARA TODOS)
+    useEffect(() => {
+        const technicians = employees.filter(emp =>
+            emp.sector === Sector.MANUTENCAO
+        );
+        setAvailableTechnicians(technicians);
+    }, [employees]);
 
     useEffect(() => {
         if (formData.sector) {
@@ -144,7 +166,7 @@ const MaintenanceRecordForm: React.FC<{
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Setor *</label>
                     <select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass}>
                         <option value="">Selecione</option>
-                        {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                        {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div>
@@ -156,11 +178,49 @@ const MaintenanceRecordForm: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Solicitante</label>
-                    <input type="text" value={formData.requester} onChange={e => setFormData({ ...formData, requester: e.target.value })} className={inputClass} />
+                    {availableRequesters.length > 0 ? (
+                        <select
+                            value={formData.requester}
+                            onChange={e => setFormData({ ...formData, requester: e.target.value })}
+                            className={inputClass}
+                        >
+                            <option value="">Selecione</option>
+                            {availableRequesters.map(emp => (
+                                <option key={emp.id} value={emp.name}>{emp.name}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            type="text"
+                            value={formData.requester}
+                            onChange={e => setFormData({ ...formData, requester: e.target.value })}
+                            className={inputClass}
+                            placeholder="Digite o nome do solicitante"
+                        />
+                    )}
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Técnico</label>
-                    <input type="text" value={formData.technician} onChange={e => setFormData({ ...formData, technician: e.target.value })} className={inputClass} />
+                    {availableTechnicians.length > 0 ? (
+                        <select
+                            value={formData.technician}
+                            onChange={e => setFormData({ ...formData, technician: e.target.value })}
+                            className={inputClass}
+                        >
+                            <option value="">Selecione</option>
+                            {availableTechnicians.map(emp => (
+                                <option key={emp.id} value={emp.name}>{emp.name}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        <input
+                            type="text"
+                            value={formData.technician}
+                            onChange={e => setFormData({ ...formData, technician: e.target.value })}
+                            className={inputClass}
+                            placeholder="Digite o nome do técnico"
+                        />
+                    )}
                 </div>
                 <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição do Problema *</label>
@@ -171,18 +231,17 @@ const MaintenanceRecordForm: React.FC<{
                     <textarea value={formData.solution} onChange={e => setFormData({ ...formData, solution: e.target.value })} rows={3} className={inputClass}></textarea>
                 </div>
                 <div className="grid grid-cols-3 gap-4 md:col-span-2 items-end">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Hora Início *</label>
-                        <select value={formData.startTime} onChange={e => setFormData({ ...formData, startTime: e.target.value })} className={inputClass}>
-                            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Hora Fim</label>
-                        <select value={formData.endTime} onChange={e => setFormData({ ...formData, endTime: e.target.value })} className={inputClass}>
-                            {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
+                    <TimePickerInput
+                        label="Hora Início"
+                        value={formData.startTime}
+                        onChange={(time) => setFormData({ ...formData, startTime: time })}
+                        required
+                    />
+                    <TimePickerInput
+                        label="Hora Fim"
+                        value={formData.endTime}
+                        onChange={(time) => setFormData({ ...formData, endTime: time })}
+                    />
                     <div>
                         <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Duração</label>
                         <input type="text" readOnly value={durationDisplay} className="mt-1 block w-full rounded-md bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 p-2 font-semibold text-center dark:text-white" />
@@ -206,12 +265,13 @@ const MaintenanceRecordForm: React.FC<{
 
 interface MaintenanceProps {
     machines: Machine[];
+    employees: Employee[]; // Adicionado
     records: MaintenanceRecord[];
     setRecords: React.Dispatch<React.SetStateAction<MaintenanceRecord[]>>;
     isDarkMode: boolean;
 }
 
-const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords, isDarkMode }) => {
+const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records, setRecords, isDarkMode }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<MaintenanceRecord | null>(null);
@@ -247,13 +307,13 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
     }), [isDarkMode]);
 
     const xAxisProps = useMemo(() => ({
-        tick: { fill: tickColor, fontSize: 9 },
+        tick: { fill: tickColor, fontSize: 11 },
         axisLine: false,
         tickLine: false,
         interval: 0,
-        angle: -45,
-        textAnchor: 'end' as const,
-        height: 70
+        angle: 0,
+        textAnchor: 'middle' as const,
+        height: 50
     }), [tickColor]);
 
     const yAxisProps = useMemo(() => ({
@@ -281,14 +341,18 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
 
     const chartMargin = useMemo(() => ({ top: 10, right: 10, left: -10, bottom: 20 }), []);
     const chartVerticalMargin = useMemo(() => ({ top: 0, right: 20, left: 20, bottom: 0 }), []);
-    const legendStyle = useMemo(() => ({ fontSize: '12px', paddingTop: '10px' }), []);
+    const legendStyle = useMemo(() => ({ fontSize: '14px', paddingTop: '10px' }), []);
     const lineDotProps = useMemo(() => ({ r: 4, fill: 'white', strokeWidth: 2 }), []);
     const lineActiveDotProps = useMemo(() => ({ r: 6 }), []);
     const barRadiusVertical: [number, number, number, number] = useMemo(() => [0, 4, 4, 0], []);
 
-    // Callbacks
+    // Funções de retorno
     const formatPieTooltip = useCallback((value: any, name: any) => [value, name], []);
-    const formatTimeTooltip = useCallback((value: any) => [`${value}h`, 'Horas Paradas'], []);
+    const formatTimeTooltip = useCallback((value: any) => {
+        const hours = Math.floor(value);
+        const minutes = Math.round((value - hours) * 60);
+        return [`${hours}h${minutes > 0 ? ` ${minutes}min` : ''}`, 'Horas Paradas'];
+    }, []);
     const formatVerticalBarTooltip = useCallback((value: any, name: any) => {
         if (name === 'Horas Paradas') return [`${formatDuration(value)}`, 'Tempo Total'];
         return [value, name];
@@ -318,6 +382,10 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
 
     const filteredTableRecords = useMemo(() => {
         if (!Array.isArray(records)) return [];
+
+        // Função auxiliar para normalizar strings para comparação
+        const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
         return records.filter(rec => {
             if (!rec.date) return false;
             const recDate = new Date(rec.date);
@@ -327,7 +395,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
                 const [y, m] = tableFilters.mesAno.split('-').map(Number);
                 if (recDate.getMonth() + 1 !== m || recDate.getFullYear() !== y) return false;
             }
-            if (tableFilters.sector !== 'Todos' && rec.sector !== tableFilters.sector) return false;
+            if (tableFilters.sector !== 'Todos' && normalize(String(rec.sector)) !== normalize(tableFilters.sector)) return false;
             if (tableFilters.status !== 'Todos' && rec.status !== tableFilters.status) return false;
             if (tableFilters.machine && !rec.machine.toLowerCase().includes(tableFilters.machine.toLowerCase())) return false;
             return true;
@@ -465,12 +533,22 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
             durationHours = diffMs / (1000 * 60 * 60);
         }
 
+        // Converter campos de texto para maiúsculas
+        const normalizedData = {
+            ...data,
+            machine: data.machine.toUpperCase(),
+            requester: data.requester?.toUpperCase() || '',
+            technician: data.technician?.toUpperCase() || '',
+            problem: data.problem.toUpperCase(),
+            solution: data.solution?.toUpperCase() || ''
+        };
+
         try {
             if (currentRecord) {
-                const updated = await maintenanceService.update(currentRecord.id, { ...data, durationHours });
+                const updated = await maintenanceService.update(currentRecord.id, { ...normalizedData, durationHours });
                 setRecords(records.map(r => r.id === currentRecord.id ? updated : r));
             } else {
-                const created = await maintenanceService.create({ ...data, durationHours });
+                const created = await maintenanceService.create({ ...normalizedData, durationHours });
                 setRecords([...records, created]);
             }
             handleCloseModal();
@@ -503,7 +581,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removed
+        // const XLSX = (window as any).XLSX; // Removido
         const dataToExport = filteredTableRecords.map(r => ({
             'Data': formatDateSafe(r.date),
             'Setor': r.sector,
@@ -526,7 +604,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removed
+        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Ordens de Manutenção", 14, 16);
         autoTable(doc, {
@@ -547,7 +625,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
 
     const renderOverview = () => (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <DatePickerInput
@@ -563,6 +641,20 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
                             onChange={(date) => setOverviewFilters({ ...overviewFilters, end: date })}
                         />
                     </div>
+                </div>
+                {(overviewFilters.start || overviewFilters.end) && (
+                    <div className="mt-4 flex justify-end">
+                        <button
+                            onClick={() => setOverviewFilters({ start: '', end: '' })}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                            🔄 Limpar Filtros
+                        </button>
+                    </div>
+                )}
+                <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Filter size={16} className="text-imac-primary" />
+                    <span>Mostrando <span className="font-semibold text-imac-primary">{filteredOverviewRecords.length}</span> de <span className="font-semibold">{records.length}</span> registros</span>
                 </div>
             </div>
 
@@ -663,7 +755,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
 
     const renderRecords = () => (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm space-y-4 no-print transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Mês/Ano</label>
@@ -725,7 +817,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
                 )}
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><List size={20} />Registros de Manutenção</h3>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -813,7 +905,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, records, setRecords
                 onClose={handleCloseModal}
                 title={currentRecord ? 'Editar Ordem de Manutenção' : 'Nova Ordem de Manutenção'}
             >
-                <MaintenanceRecordForm record={currentRecord} onSave={handleSave} onCancel={handleCloseModal} machines={machines} />
+                <MaintenanceRecordForm record={currentRecord} onSave={handleSave} onCancel={handleCloseModal} machines={machines} employees={employees} />
             </Modal>
 
             <ConfirmModal

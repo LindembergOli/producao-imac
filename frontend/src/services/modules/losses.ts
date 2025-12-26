@@ -1,9 +1,16 @@
 /**
- * SERVIÇO: Perdas de Produção
+ * SERVIÇO: Perdas
  */
 
 import api from '../api';
-import { LossRecord, Sector } from '../../types';
+import { LossRecord, LossType, Sector } from '../../types';
+import { extractData } from '../helpers';
+
+const lossTypeMap: Record<string, LossType> = {
+    'MASSA': LossType.MASSA,
+    'EMBALAGEM': LossType.EMBALAGEM,
+    'INSUMO': LossType.INSUMO
+};
 
 const sectorMap: Record<string, Sector> = {
     'CONFEITARIA': Sector.CONFEITARIA,
@@ -16,6 +23,7 @@ const sectorMap: Record<string, Sector> = {
 const transformRecord = (record: any): LossRecord => {
     return {
         ...record,
+        lossType: lossTypeMap[record.lossType] || record.lossType,
         sector: sectorMap[record.sector] || record.sector
     };
 };
@@ -23,7 +31,8 @@ const transformRecord = (record: any): LossRecord => {
 export const lossesService = {
     getAll: async (): Promise<LossRecord[]> => {
         const response = await api.get('/losses');
-        return response.data.data.map(transformRecord);
+        const data = extractData<any>(response);
+        return data.map(transformRecord);
     },
 
     getById: async (id: number): Promise<LossRecord> => {

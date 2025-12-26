@@ -15,6 +15,7 @@
 
 import * as machineService from './service.js';
 import { success } from '../../utils/responses.js';
+import { logAudit } from '../../middlewares/audit.js';
 
 /**
  * GET /api/machines
@@ -88,6 +89,18 @@ export const getStats = async (req, res, next) => {
 export const create = async (req, res, next) => {
     try {
         const machine = await machineService.create(req.body);
+
+        // Auditar criação
+        await logAudit({
+            userId: req.user?.id,
+            action: 'CREATE_RECORD',
+            entity: 'Machine',
+            entityId: machine.id,
+            details: { ...req.body },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+
         return success(res, {
             data: machine,
             message: 'Máquina criada com sucesso',
@@ -105,6 +118,18 @@ export const create = async (req, res, next) => {
 export const update = async (req, res, next) => {
     try {
         const machine = await machineService.update(req.params.id, req.body);
+
+        // Auditar atualização
+        await logAudit({
+            userId: req.user?.id,
+            action: 'UPDATE_RECORD',
+            entity: 'Machine',
+            entityId: parseInt(req.params.id),
+            details: { ...req.body },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+
         return success(res, {
             data: machine,
             message: 'Máquina atualizada com sucesso',
@@ -120,7 +145,27 @@ export const update = async (req, res, next) => {
  */
 export const remove = async (req, res, next) => {
     try {
+        // Buscar máquina antes de deletar para registrar detalhes
+        const machine = await machineService.getById(req.params.id);
+
         await machineService.remove(req.params.id);
+
+        // Auditar deleção com detalhes
+        await logAudit({
+            userId: req.user?.id,
+            action: 'DELETE_RECORD',
+            entity: 'Machine',
+            entityId: parseInt(req.params.id),
+            details: {
+                name: machine.name,
+                sector: machine.sector,
+                code: machine.code,
+                model: machine.model,
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
+
         return success(res, {
             data: null,
             message: 'Máquina deletada com sucesso',

@@ -9,16 +9,22 @@ import autoTable from 'jspdf-autotable';
 import Modal, { ConfirmModal } from '../components/Modal';
 import { employeesService } from '../services/modules/employees';
 
+import { useAuth } from '../contexts/AuthContext';
+import { getVisibleSectors } from '../utils/sectorUtils';
+
 const EmployeeForm: React.FC<{
     employee: Partial<Employee> | null;
     onSave: (employee: Omit<Employee, 'id'>) => void;
     onCancel: () => void;
 }> = ({ employee, onSave, onCancel }) => {
+    const { user } = useAuth();
     const [formData, setFormData] = useState({
         name: employee?.name || '',
         sector: employee?.sector || '',
         role: employee?.role || '',
     });
+
+    const visibleSectors = getVisibleSectors(user?.role || 'USER', 'employees');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -46,7 +52,7 @@ const EmployeeForm: React.FC<{
                     className={inputClass}
                 >
                     <option value="" disabled>Selecione o setor</option>
-                    {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                    {visibleSectors.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
             </div>
             <div>
@@ -94,14 +100,49 @@ interface EmployeesProps {
 }
 
 const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
+    const { user } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
-    const sortedEmployees = useMemo(() => {
+    // Estado dos filtros
+    const [filters, setFilters] = useState({
+        sector: '',
+        name: '',
+        role: ''
+    });
+
+    const filteredAndSortedEmployees = useMemo(() => {
         if (!Array.isArray(employees)) return [];
-        return [...employees].sort((a, b) => a.sector.localeCompare(b.sector));
-    }, [employees]);
+
+        // Filtrar funcionários do setor Manutenção se o usuário não for ADMIN
+        let filtered = user?.role === 'ADMIN'
+            ? employees
+            : employees.filter(emp => emp.sector !== Sector.MANUTENCAO);
+
+        // Aplicar filtros
+        if (filters.sector) {
+            filtered = filtered.filter(emp => emp.sector === filters.sector);
+        }
+        if (filters.name) {
+            filtered = filtered.filter(emp =>
+                emp.name.toLowerCase().includes(filters.name.toLowerCase())
+            );
+        }
+        if (filters.role) {
+            filtered = filtered.filter(emp =>
+                emp.role?.toLowerCase().includes(filters.role.toLowerCase())
+            );
+        }
+
+        return [...filtered].sort((a, b) => a.sector.localeCompare(b.sector));
+    }, [employees, user?.role, filters]);
+
+    const clearFilters = () => {
+        setFilters({ sector: '', name: '', role: '' });
+    };
+
+    const visibleSectors = getVisibleSectors(user?.role || 'USER', 'employees');
 
     const handleOpenModal = (employee?: Employee) => {
         setCurrentEmployee(employee || null);
@@ -116,11 +157,17 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
     const handleSave = async (employeeData: Omit<Employee, 'id'>) => {
         const currentEmployees = Array.isArray(employees) ? employees : [];
         try {
+            // Converter campos de texto para maiúsculas
+            const normalizedData = {
+                ...employeeData,
+                name: employeeData.name.toUpperCase()
+            };
+
             if (currentEmployee) {
-                const updated = await employeesService.update(currentEmployee.id, employeeData);
+                const updated = await employeesService.update(currentEmployee.id, normalizedData);
                 setEmployees(currentEmployees.map(emp => emp.id === currentEmployee.id ? updated : emp));
             } else {
-                const created = await employeesService.create(employeeData);
+                const created = await employeesService.create(normalizedData);
                 setEmployees([...currentEmployees, created]);
             }
             handleCloseModal();
@@ -153,7 +200,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removed
+        // const XLSX = (window as any).XLSX; // Removido
         const dataToExport = employees.map(({ sector, name, role }) => ({
             Setor: sector,
             Nome: name,
@@ -170,7 +217,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removed
+        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Funcionários", 14, 16);
         autoTable(doc, {
@@ -210,10 +257,68 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                 </div>
             </header>
 
+            {/* Filter Bar */}
+            <div className="bg-gray-50 dark:bg-slate-700/30 p-4 rounded-lg shadow-md dark:shadow-lg border border-slate-200/30 dark:border-slate-600/30">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Sector Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Setor
+                        </label>
+                        <select
+                            value={filters.sector}
+                            onChange={(e) => setFilters({ ...filters, sector: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        >
+                            <option value="">Todos os setores</option>
+                            {visibleSectors.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Name Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Nome
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Buscar por nome..."
+                            value={filters.name}
+                            onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+
+                    {/* Role Filter */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Cargo
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Buscar por cargo..."
+                            value={filters.role}
+                            onChange={(e) => setFilters({ ...filters, role: e.target.value })}
+                            className="w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+
+                    {/* Clear Filters Button */}
+                    <div className="flex items-end">
+                        <button
+                            onClick={clearFilters}
+                            className="w-full bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-md hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors text-sm font-medium"
+                        >
+                            Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <main className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md transition-colors">
                 <h2 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary flex items-center mb-6">
                     <Users size={22} className="mr-3 text-imac-primary dark:text-imac-secondary" />
-                    Lista de Funcionários
+                    Lista de Funcionários ({filteredAndSortedEmployees.length})
                 </h2>
 
                 <div className="overflow-x-auto">
@@ -228,15 +333,15 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
 
                         {/* Body */}
                         <div className="mt-2">
-                            {sortedEmployees.length === 0 ? (
+                            {filteredAndSortedEmployees.length === 0 ? (
                                 <div className="text-center py-16 text-gray-400">
                                     <div className="flex flex-col items-center justify-center">
                                         <Users size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
-                                        <p>Nenhum funcionário cadastrado</p>
+                                        <p>{filters.sector || filters.name || filters.role ? 'Nenhum funcionário encontrado com os filtros aplicados' : 'Nenhum funcionário cadastrado'}</p>
                                     </div>
                                 </div>
                             ) : (
-                                sortedEmployees.map((emp) => (
+                                filteredAndSortedEmployees.map((emp) => (
                                     <div key={emp.id} className="grid grid-cols-10 gap-4 items-center px-4 py-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                                         <div className="col-span-3 text-gray-600 dark:text-gray-300">{emp.sector}</div>
                                         <div className="col-span-4 font-medium text-gray-800 dark:text-gray-100">{emp.name}</div>

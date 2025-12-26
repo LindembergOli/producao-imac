@@ -13,11 +13,12 @@
  * Setores da fábrica IMAC Congelados
  */
 export enum Sector {
-  CONFEITARIA = 'Confeitaria',
-  PAES = 'Pães',
-  SALGADO = 'Salgado',
-  PAO_DE_QUEIJO = 'Pão de Queijo',
-  EMBALADORA = 'Embaladora'
+  CONFEITARIA = 'CONFEITARIA',
+  PAES = 'PÃES',
+  SALGADO = 'SALGADO',
+  PAO_DE_QUEIJO = 'PÃO DE QUEIJO',
+  EMBALADORA = 'EMBALADORA',
+  MANUTENCAO = 'MANUTENÇÃO'
 }
 
 /**
@@ -87,7 +88,19 @@ export interface Product {
   name: string;
   unit: Unit;
   yield?: number;      // Rendimento esperado
-  unit_cost?: number;  // Custo unitário
+  unitCost?: number;   // Custo unitário
+  notes?: string;      // Observações adicionais
+}
+
+/**
+ * Representa um supply (matéria-prima/insumo)
+ */
+export interface Supply {
+  id: number;
+  sector: Sector;
+  name: string;
+  unit: Unit;
+  unitCost: number;    // Custo por KG
   notes?: string;      // Observações adicionais
 }
 
@@ -114,6 +127,7 @@ export type Page =
   | 'Absenteísmo'
   | 'Funcionários'
   | 'Produtos'
+  | 'Insumos'
   | 'Máquinas'
   | 'Usuários';
 

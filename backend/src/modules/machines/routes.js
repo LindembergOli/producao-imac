@@ -12,6 +12,8 @@ import * as validator from './validator.js';
 import { validate } from '../../middlewares/validate.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { canCreate, canEdit, canDelete } from '../../middlewares/authorize.js';
+import { auditFieldsMiddleware } from '../../middlewares/auditFields.js';
+import { softDelete } from '../../middlewares/softDelete.js';
 
 const router = Router();
 router.use(authenticate); router.get(
@@ -44,6 +46,7 @@ router.post(
     '/',
     validate(validator.createSchema),
     canCreate,
+    auditFieldsMiddleware,
     controller.create
 );
 
@@ -56,6 +59,7 @@ router.put(
     validate(validator.idParamSchema, 'params'),
     validate(validator.updateSchema),
     canEdit,
+    auditFieldsMiddleware,
     controller.update
 );
 

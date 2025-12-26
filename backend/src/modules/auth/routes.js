@@ -24,6 +24,7 @@ import { validate } from '../../middlewares/validate.js';
 import { authenticate } from '../../middlewares/auth.js';
 import { loginRateLimitConfig, registerRateLimitConfig } from '../../config/security.js';
 import logger from '../../utils/logger.js';
+import { auditLogin, auditLogout } from '../../middlewares/audit.js';
 
 const router = Router();
 
@@ -98,7 +99,8 @@ router.post(
     '/login',
     loginLimiter,
     validate(validator.loginSchema),
-    controller.login
+    controller.login,
+    auditLogin
 );
 
 /**
@@ -122,7 +124,8 @@ router.post(
 router.post(
     '/logout',
     validate(validator.logoutSchema),
-    controller.logout
+    controller.logout,
+    auditLogout
 );
 
 /**
@@ -162,7 +165,8 @@ router.post(
 router.post(
     '/logout-all',
     authenticate,
-    controller.logoutAll
+    controller.logoutAll,
+    auditLogout
 );
 
 /**

@@ -29,6 +29,7 @@ import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import logger, { httpLogger } from './utils/logger.js';
 import { enforceHttps } from './middlewares/httpsRedirect.js';
 import { sanitize } from './middlewares/sanitize.js';
+import { requestIdMiddleware, requestEndMiddleware } from './middlewares/requestId.js';
 import routes from './routes.js';
 
 const app = express();
@@ -41,11 +42,26 @@ const app = express();
 app.use(enforceHttps);
 
 // ========================================
+// REQUEST ID / CORRELATION ID
+// ========================================
+
+// Gerar requestId único para cada requisição (rastreamento)
+app.use(requestIdMiddleware);
+
+// ========================================
 // LOGGING
 // ========================================
 
 // Log de requisições HTTP
 app.use(httpLogger);
+
+// ========================================
+// MÉTRICAS DE PERFORMANCE
+// ========================================
+
+// Coletar métricas de cada requisição
+import { metricsMiddleware } from './middlewares/metrics.js';
+app.use(metricsMiddleware);
 
 // ========================================
 // MIDDLEWARES DE SEGURANÇA
@@ -94,20 +110,19 @@ app.use(sanitize);
 // ROTAS
 // ========================================
 
-// Health check
-app.get('/health', (req, res) => {
-    res.json({
-        success: true,
-        message: 'API IMAC Congelados funcionando',
-        timestamp: new Date().toISOString(),
-        environment: config.env,
-        uptime: process.uptime(),
-        version: '2.0.0-AMP',
-    });
-});
+// Health check robusto (validação de dependências)
+import healthRoutes from './routes/health.js';
+app.use('/health', healthRoutes);
 
 // Rotas da API (todos os módulos)
 app.use('/api', routes);
+
+// ========================================
+// REQUEST TRACKING
+// ========================================
+
+// Log de fim de requisição (deve vir antes do error handling)
+app.use(requestEndMiddleware);
 
 // ========================================
 // ERROR HANDLING

@@ -15,15 +15,64 @@ enum UserRole {
 }
 
 model User {
-  id                  Int                  @id @default(autoincrement())
-  email               String               @unique
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique
   password            String
   name                String
-  role                UserRole             @default(ESPECTADOR)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  role                UserRole  @default(ESPECTADOR)
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relações existentes
   passwordResetTokens PasswordResetToken[]
   refreshTokens       RefreshToken[]
+
+  // Relações de auditoria - Product
+  productsCreated Product[] @relation("ProductCreatedBy")
+  productsUpdated Product[] @relation("ProductUpdatedBy")
+  productsDeleted Product[] @relation("ProductDeletedBy")
+
+  // Relações de auditoria - Supply
+  suppliesCreated Supply[] @relation("SupplyCreatedBy")
+  suppliesUpdated Supply[] @relation("SupplyUpdatedBy")
+  suppliesDeleted Supply[] @relation("SupplyDeletedBy")
+
+  // Relações de auditoria - Machine
+  machinesCreated Machine[] @relation("MachineCreatedBy")
+  machinesUpdated Machine[] @relation("MachineUpdatedBy")
+  machinesDeleted Machine[] @relation("MachineDeletedBy")
+
+  // Relações de auditoria - ProductionSpeed
+  productionSpeedsCreated ProductionSpeed[] @relation("ProductionSpeedCreatedBy")
+  productionSpeedsUpdated ProductionSpeed[] @relation("ProductionSpeedUpdatedBy")
+  productionSpeedsDeleted ProductionSpeed[] @relation("ProductionSpeedDeletedBy")
+
+  // Relações de auditoria - Loss
+  lossesCreated Loss[] @relation("LossCreatedBy")
+  lossesUpdated Loss[] @relation("LossUpdatedBy")
+  lossesDeleted Loss[] @relation("LossDeletedBy")
+
+  // Relações de auditoria - Error
+  errorsCreated Error[] @relation("ErrorCreatedBy")
+  errorsUpdated Error[] @relation("ErrorUpdatedBy")
+  errorsDeleted Error[] @relation("ErrorDeletedBy")
+
+  // Relações de auditoria - Maintenance
+  maintenancesCreated Maintenance[] @relation("MaintenanceCreatedBy")
+  maintenancesUpdated Maintenance[] @relation("MaintenanceUpdatedBy")
+  maintenancesDeleted Maintenance[] @relation("MaintenanceDeletedBy")
+
+  // Relações de auditoria - Absenteeism
+  absenteeismsCreated Absenteeism[] @relation("AbsenteeismCreatedBy")
+  absenteeismsUpdated Absenteeism[] @relation("AbsenteeismUpdatedBy")
+  absenteeismsDeleted Absenteeism[] @relation("AbsenteeismDeletedBy")
+  
+  // Relações de auditoria - Employee
+  employeesCreated Employee[] @relation("EmployeeCreatedBy")
+  employeesUpdated Employee[] @relation("EmployeeUpdatedBy")
+  employeesDeleted Employee[] @relation("EmployeeDeletedBy")
 
   @@map("users")
 }
@@ -55,39 +104,131 @@ model Employee {
   sector    Sector
   name      String
   role      String?
+  
+  // Campos de auditoria temporal
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  // Campos de auditoria de usuário
+  createdBy     Int?
+  createdByUser User? @relation("EmployeeCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  
+  updatedBy     Int?
+  updatedByUser User? @relation("EmployeeUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  
+  deletedBy     Int?
+  deletedByUser User? @relation("EmployeeDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+  
+  // Soft delete
+  deletedAt DateTime?
 
   @@map("employees")
 }
 
 model Product {
-  id        Int      @id @default(autoincrement())
-  sector    Sector
-  name      String
-  unit      Unit
-  yield     Float?
-  unitCost  Float?   @map("unit_cost")
-  notes     String?
+  id       Int     @id @default(autoincrement())
+  sector   Sector
+  name     String
+  unit     Unit
+  yield    Float?
+  unitCost Float?  @map("unit_cost")
+  notes    String?
+
+  // Campos de auditoria temporal
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Campos de auditoria de usuário
+  createdBy     Int?
+  createdByUser User? @relation("ProductCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  updatedBy     Int?
+  updatedByUser User? @relation("ProductUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  // Soft delete
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("ProductDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([sector]) // Filtro por setor
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([createdBy]) // Auditoria
+  @@index([updatedBy]) // Auditoria
+  @@index([sector, deletedAt]) // Filtro combinado comum
+  
   @@map("products")
 }
 
-model Machine {
-  id        Int      @id @default(autoincrement())
-  sector    Sector
-  name      String
-  code      String   @unique
+model Supply {
+  id       Int     @id @default(autoincrement())
+  sector   Sector
+  name     String
+  unit     Unit
+  unitCost Float   @map("unit_cost") // Custo por KG
+  notes    String?
+
+  // Campos de auditoria temporal
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Campos de auditoria de usuário
+  createdBy     Int?
+  createdByUser User? @relation("SupplyCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  updatedBy     Int?
+  updatedByUser User? @relation("SupplyUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  // Soft delete
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("SupplyDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([sector]) // Filtro por setor
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([createdBy]) // Auditoria
+  @@index([updatedBy]) // Auditoria
+  @@index([sector, deletedAt]) // Filtro combinado comum
+  
+  @@map("supplies")
+}
+
+model Machine {
+  id     Int    @id @default(autoincrement())
+  sector Sector
+  name   String
+  code   String @unique
+
+  // Campos de auditoria temporal
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Campos de auditoria de usuário
+  createdBy     Int?
+  createdByUser User? @relation("MachineCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+
+  updatedBy     Int?
+  updatedByUser User? @relation("MachineUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  // Soft delete
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("MachineDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([sector]) // Filtro por setor
+  @@index([code]) // Busca por código
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([createdBy]) // Auditoria
+  @@index([updatedBy]) // Auditoria
+  @@index([sector, deletedAt]) // Filtro combinado comum
+  
   @@map("machines")
 }
 
 model ProductionSpeed {
-  id              Int      @id @default(autoincrement())
+  id              Int    @id @default(autoincrement())
   mesAno          String
   sector          Sector
   produto         String
@@ -96,9 +237,25 @@ model ProductionSpeed {
   totalProgramado Float
   totalRealizado  Float
   velocidade      Float
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy     Int?
+  createdByUser User?     @relation("ProductionSpeedCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedBy     Int?
+  updatedByUser User?     @relation("ProductionSpeedUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("ProductionSpeedDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([mesAno]) // Filtro por mês/ano
+  @@index([sector]) // Filtro por setor
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([createdBy]) // Auditoria
+  @@index([mesAno, sector, deletedAt]) // Filtro combinado comum
+  
   @@map("production_speed")
 }
 
@@ -112,9 +269,24 @@ model Loss {
   unit      Unit
   unitCost  Float
   totalCost Float
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  createdBy     Int?
+  createdByUser User?     @relation("LossCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedBy     Int?
+  updatedByUser User?     @relation("LossUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("LossDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([date]) // Filtro por data
+  @@index([product]) // Filtro por produto
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([date, deletedAt]) // Filtro combinado comum
+  
   @@map("losses")
 }
 
@@ -128,9 +300,24 @@ model Error {
   category    ErrorCategory
   cost        Float
   wastedQty   Float?        @map("wasted_qty")
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy     Int?
+  createdByUser User?     @relation("ErrorCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedBy     Int?
+  updatedByUser User?     @relation("ErrorUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("ErrorDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([date]) // Filtro por data
+  @@index([product]) // Filtro por produto
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([date, deletedAt]) // Filtro combinado comum
+  
   @@map("errors")
 }
 
@@ -147,9 +334,24 @@ model Maintenance {
   endTime       String
   durationHours Float
   status        MaintenanceStatus
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy     Int?
+  createdByUser User?     @relation("MaintenanceCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedBy     Int?
+  updatedByUser User?     @relation("MaintenanceUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("MaintenanceDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([date]) // Filtro por data
+  @@index([machine]) // Filtro por máquina (campo String)
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([date, deletedAt]) // Filtro combinado comum
+  
   @@map("maintenance")
 }
 
@@ -160,9 +362,24 @@ model Absenteeism {
   date         DateTime
   absenceType  AbsenceType
   daysAbsent   Int
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy     Int?
+  createdByUser User?     @relation("AbsenteeismCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedBy     Int?
+  updatedByUser User?     @relation("AbsenteeismUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  deletedAt     DateTime?
+  deletedBy     Int?
+  deletedByUser User?     @relation("AbsenteeismDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+
+  // Índices para otimização de performance
+  @@index([date]) // Filtro por data
+  @@index([sector]) // Filtro por setor
+  @@index([deletedAt]) // Filtro de soft delete
+  @@index([date, deletedAt]) // Filtro combinado comum
+  
   @@map("absenteeism")
 }
 
@@ -172,6 +389,7 @@ enum Sector {
   SALGADO
   PAO_DE_QUEIJO
   EMBALADORA
+  MANUTENCAO
 }
 
 enum Unit {
@@ -201,4 +419,20 @@ enum AbsenceType {
   ATESTADO
   FALTA_INJUSTIFICADA
   BANCO_DE_HORAS
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  action    String // LOGIN, LOGOUT, CREATE_USER, DELETE_RECORD, etc
+  entity    String? // Nome da entidade afetada (User, Product, etc)
+  entityId  Int? // ID da entidade afetada
+  details   Json? // Detalhes adicionais da ação
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }

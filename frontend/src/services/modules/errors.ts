@@ -3,27 +3,38 @@
  */
 
 import api from '../api';
-import { ErrorRecord, Sector } from '../../types';
+import { ErrorRecord, ErrorCategory, Sector } from '../../types';
+import { extractData } from '../helpers';
 
 const sectorMap: Record<string, Sector> = {
     'CONFEITARIA': Sector.CONFEITARIA,
     'PAES': Sector.PAES,
     'SALGADO': Sector.SALGADO,
     'PAO_DE_QUEIJO': Sector.PAO_DE_QUEIJO,
-    'EMBALADORA': Sector.EMBALADORA
+    'EMBALADORA': Sector.EMBALADORA,
+    'MANUTENCAO': Sector.MANUTENCAO
+};
+
+const errorCategoryMap: Record<string, ErrorCategory> = {
+    'OPERACIONAL': ErrorCategory.OPERACIONAL,
+    'EQUIPAMENTO': ErrorCategory.EQUIPAMENTO,
+    'MATERIAL': ErrorCategory.MATERIAL,
+    'QUALIDADE': ErrorCategory.QUALIDADE
 };
 
 const transformRecord = (record: any): ErrorRecord => {
     return {
         ...record,
-        sector: sectorMap[record.sector] || record.sector
+        sector: sectorMap[record.sector] || record.sector,
+        category: errorCategoryMap[record.category] || record.category
     };
 };
 
 export const errorsService = {
     getAll: async (): Promise<ErrorRecord[]> => {
         const response = await api.get('/errors');
-        return response.data.data.map(transformRecord);
+        const data = extractData<any>(response.data);
+        return data.map(transformRecord);
     },
 
     getById: async (id: number): Promise<ErrorRecord> => {

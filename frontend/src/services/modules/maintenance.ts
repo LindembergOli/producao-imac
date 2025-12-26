@@ -3,27 +3,26 @@
  */
 
 import api from '../api';
-import { MaintenanceRecord, Sector } from '../../types';
+import { MaintenanceRecord, MaintenanceStatus } from '../../types';
+import { extractData } from '../helpers';
 
-const sectorMap: Record<string, Sector> = {
-    'CONFEITARIA': Sector.CONFEITARIA,
-    'PAES': Sector.PAES,
-    'SALGADO': Sector.SALGADO,
-    'PAO_DE_QUEIJO': Sector.PAO_DE_QUEIJO,
-    'EMBALADORA': Sector.EMBALADORA
+const statusMap: Record<string, MaintenanceStatus> = {
+    'EM_ABERTO': MaintenanceStatus.EM_ABERTO,
+    'FECHADO': MaintenanceStatus.FECHADO
 };
 
 const transformRecord = (record: any): MaintenanceRecord => {
     return {
         ...record,
-        sector: sectorMap[record.sector] || record.sector
+        status: statusMap[record.status] || record.status
     };
 };
 
 export const maintenanceService = {
     getAll: async (): Promise<MaintenanceRecord[]> => {
         const response = await api.get('/maintenance');
-        return response.data.data.map(transformRecord);
+        const data = extractData<any>(response.data);
+        return data.map(transformRecord);
     },
 
     getById: async (id: number): Promise<MaintenanceRecord> => {

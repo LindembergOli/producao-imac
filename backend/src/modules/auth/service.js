@@ -23,6 +23,8 @@ import prisma from '../../config/database.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 import logger from '../../utils/logger.js';
 import { maskSensitiveData } from '../../utils/helpers.js';
+import { validateStrongPassword } from '../../utils/passwordValidator.js';
+import { BusinessEvents, logAuthEvent } from '../../utils/businessLogger.js';
 
 /**
  * Gera um Access Token JWT
@@ -89,6 +91,8 @@ const generateRefreshToken = async (userId) => {
 /**
  * Registra um novo usuário no sistema
  * 
+ * Valida senha forte antes de criar o usuário.
+ * 
  * @param {Object} data - Dados do usuário
  * @param {string} data.email - Email do usuário
  * @param {string} data.password - Senha do usuário
@@ -96,10 +100,16 @@ const generateRefreshToken = async (userId) => {
  * @param {string} [data.role='user'] - Role do usuário (admin, supervisor, user)
  * 
  * @returns {Promise<Object>} Usuário criado (sem senha)
- * @throws {AppError} Se o email já estiver cadastrado
+ * @throws {AppError} Se o email já estiver cadastrado ou senha for fraca
  */
 export const register = async (data) => {
     const { email, password, name, role = 'user' } = data;
+
+    // Validar senha forte
+    const passwordValidation = validateStrongPassword(password);
+    if (!passwordValidation.success) {
+        throw new AppError(passwordValidation.message, 400);
+    }
 
     // Verificar se usuário já existe
     const existingUser = await prisma.user.findUnique({
@@ -142,11 +152,14 @@ export const register = async (data) => {
 /**
  * Realiza login do usuário
  * 
+ * Implementa bloqueio de conta após 5 tentativas falhas.
+ * Conta é desbloqueada automaticamente após 15 minutos.
+ * 
  * @param {string} email - Email do usuário
  * @param {string} password - Senha do usuário
  * 
  * @returns {Promise<Object>} Objeto com user, accessToken e refreshToken
- * @throws {AppError} Se credenciais forem inválidas
+ * @throws {AppError} Se credenciais forem inválidas ou conta bloqueada
  */
 export const login = async (email, password) => {
     // Buscar usuário por email
@@ -161,16 +174,80 @@ export const login = async (email, password) => {
         throw new AppError('Email ou senha inválidos', 401);
     }
 
+    // Verificar se conta está bloqueada
+    if (user.lockedUntil && new Date() < user.lockedUntil) {
+        const minutesRemaining = Math.ceil((user.lockedUntil - new Date()) / 60000);
+        logger.warn('Tentativa de login em conta bloqueada', {
+            userId: user.id,
+            email: maskSensitiveData(email, 3),
+            minutesRemaining,
+        });
+        // Mensagem genérica - não revelar tempo exato ao usuário
+        throw new AppError(
+            'Conta temporariamente bloqueada por questões de segurança. Tente novamente mais tarde.',
+            403
+        );
+    }
+
     // Verificar senha
     const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
-        logger.warn('Tentativa de login com senha inválida', {
-            userId: user.id,
-            email: maskSensitiveData(email, 3),
+        // Incrementar tentativas falhas
+        const failedAttempts = user.failedLoginAttempts + 1;
+        const MAX_ATTEMPTS = 5;
+        const LOCK_DURATION_MINUTES = 15;
+
+        let updateData = {
+            failedLoginAttempts: failedAttempts,
+        };
+
+        // Bloquear conta se atingiu limite
+        if (failedAttempts >= MAX_ATTEMPTS) {
+            const lockedUntil = new Date();
+            lockedUntil.setMinutes(lockedUntil.getMinutes() + LOCK_DURATION_MINUTES);
+            updateData.lockedUntil = lockedUntil;
+
+            logger.warn('Conta bloqueada por tentativas excessivas', {
+                userId: user.id,
+                email: maskSensitiveData(email, 3),
+                attempts: failedAttempts,
+            });
+        } else {
+            logger.warn('Tentativa de login com senha inválida', {
+                userId: user.id,
+                email: maskSensitiveData(email, 3),
+                attempts: failedAttempts,
+                remainingAttempts: MAX_ATTEMPTS - failedAttempts,
+            });
+        }
+
+        // Atualizar usuário
+        await prisma.user.update({
+            where: { id: user.id },
+            data: updateData,
         });
+
+        if (failedAttempts >= MAX_ATTEMPTS) {
+            // Mensagem genérica - não revelar duração do bloqueio
+            throw new AppError(
+                'Conta temporariamente bloqueada por questões de segurança. Tente novamente mais tarde.',
+                403
+            );
+        }
+
+        // Mensagem genérica - não revelar tentativas restantes
         throw new AppError('Email ou senha inválidos', 401);
     }
+
+    // Login bem-sucedido - resetar tentativas falhas e desbloquear
+    await prisma.user.update({
+        where: { id: user.id },
+        data: {
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+        },
+    });
 
     // Gerar tokens
     const accessToken = generateAccessToken(user);
@@ -180,6 +257,16 @@ export const login = async (email, password) => {
         userId: user.id,
         email: maskSensitiveData(user.email, 3),
     });
+
+    // Log de evento de negócio
+    logAuthEvent(
+        BusinessEvents.AUTH.LOGIN_SUCCESS,
+        user.id,
+        user.email,
+        null, // requestId será adicionado pelo middleware
+        { role: user.role },
+        {}
+    );
 
     return {
         user: {
@@ -255,9 +342,10 @@ export const refresh = async (refreshToken) => {
  * Realiza logout invalidando o refresh token
  * 
  * @param {string} refreshToken - Refresh token a ser invalidado
+ * @param {number} [userId] - ID do usuário (para log de evento)
  * @returns {Promise<void>}
  */
-export const logout = async (refreshToken) => {
+export const logout = async (refreshToken, userId = null) => {
     if (!refreshToken) {
         return; // Logout sem token é válido (limpar apenas no frontend)
     }
@@ -268,6 +356,18 @@ export const logout = async (refreshToken) => {
     });
 
     logger.info('Logout realizado', { token: maskSensitiveData(refreshToken, 8) });
+
+    // Log de evento de negócio
+    if (userId) {
+        logAuthEvent(
+            BusinessEvents.AUTH.LOGOUT,
+            userId,
+            null,
+            null,
+            {},
+            {}
+        );
+    }
 };
 
 /**
@@ -389,11 +489,20 @@ export const forgotPassword = async (email) => {
 /**
  * Redefine a senha do usuário
  * 
+ * Valida senha forte antes de redefinir.
+ * 
  * @param {string} token - Token de recuperação
  * @param {string} newPassword - Nova senha
  * @returns {Promise<void>}
+ * @throws {AppError} Se token inválido ou senha fraca
  */
 export const resetPassword = async (token, newPassword) => {
+    // Validar senha forte
+    const passwordValidation = validateStrongPassword(newPassword);
+    if (!passwordValidation.success) {
+        throw new AppError(passwordValidation.message, 400);
+    }
+
     // Buscar token no banco
     const resetToken = await prisma.passwordResetToken.findUnique({
         where: { token },
@@ -410,12 +519,16 @@ export const resetPassword = async (token, newPassword) => {
         throw new AppError('Token expirado', 400);
     }
 
-    // Atualizar senha do usuário
+    // Atualizar senha do usuário e resetar bloqueio
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await prisma.user.update({
         where: { id: resetToken.userId },
-        data: { password: hashedPassword },
+        data: {
+            password: hashedPassword,
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+        },
     });
 
     // Remover token

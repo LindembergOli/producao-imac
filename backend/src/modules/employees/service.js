@@ -24,6 +24,7 @@ import logger from '../../utils/logger.js';
  */
 export const getAll = async () => {
     return await prisma.employee.findMany({
+        where: { deletedAt: null },
         orderBy: [
             { sector: 'asc' },
             { name: 'asc' }
@@ -43,7 +44,7 @@ export const getById = async (id) => {
         where: { id: parseInt(id) },
     });
 
-    if (!employee) {
+    if (!employee || employee.deletedAt) {
         throw new AppError('Funcionário não encontrado', 404);
     }
 
@@ -58,7 +59,10 @@ export const getById = async (id) => {
  */
 export const getBySector = async (sector) => {
     return await prisma.employee.findMany({
-        where: { sector },
+        where: {
+            sector,
+            deletedAt: null
+        },
         orderBy: { name: 'asc' },
     });
 };
@@ -122,11 +126,13 @@ export const remove = async (id) => {
     // Verificar se funcionário existe
     await getById(id);
 
-    await prisma.employee.delete({
+    // Soft delete - marca como deletado ao invés de remover fisicamente
+    await prisma.employee.update({
         where: { id: parseInt(id) },
+        data: { deletedAt: new Date() }
     });
 
-    logger.info('Funcionário deletado', { employeeId: id });
+    logger.info('Funcionário marcado como deletado (soft delete)', { employeeId: id });
 };
 
 /**

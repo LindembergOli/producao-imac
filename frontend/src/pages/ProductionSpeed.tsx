@@ -55,7 +55,7 @@ const ProductionRecordForm: React.FC<{
         return { totalProgramado, totalRealizado, velocidade };
     }, [formData.dailyProduction]);
 
-    // Helper to normalize strings for comparison (remove accents and casing)
+    // Função auxiliar para normalizar strings para comparação (remove acentos e maiúsculas)
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
     useEffect(() => {
@@ -108,7 +108,7 @@ const ProductionRecordForm: React.FC<{
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Setor *</label>
                     <select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass}>
-                        {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                        {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div>
@@ -206,15 +206,15 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
     };
 
-    // Standardized XAxis props to match Dashboard configuration
+    // Propriedades padronizadas do XAxis para corresponder à configuração do Dashboard
     const xAxisProps = {
-        tick: { fill: tickColor, fontSize: 9 },
+        tick: { fill: tickColor, fontSize: 11 },
         axisLine: false,
         tickLine: false,
         interval: 0,
-        angle: -45,
-        textAnchor: 'end' as const,
-        height: 70
+        angle: 0,
+        textAnchor: 'middle' as const,
+        height: 50
     };
 
     const filteredOverviewRecords = useMemo(() => {
@@ -334,13 +334,13 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         if (!Array.isArray(records)) return;
         try {
             if (currentRecord) {
-                // Update existing record
+                // Atualizar registro existente
                 await productionService.update(currentRecord.id, data);
             } else {
-                // Create new record
+                // Criar novo registro
                 await productionService.create(data);
             }
-            // Refetch all records to ensure consistency (especially computed fields)
+            // Recarregar todos os registros para garantir consistência (especialmente campos computados)
             const updatedRecords = await productionService.getAll();
             setRecords(updatedRecords);
             handleCloseModal();
@@ -376,7 +376,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removed
+        // const XLSX = (window as any).XLSX; // Removido
         const dataToExport = filteredTableRecords.map(r => {
             const [m, y] = r.mesAno.split('/');
             const year = Number(y);
@@ -411,7 +411,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removed
+        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Velocidade de Produção", 14, 16);
         autoTable(doc, {
@@ -445,7 +445,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
     };
 
     const chartData = useMemo(() => {
-        const sectors = Object.values(Sector);
+        const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
         const dataBySector = filteredOverviewRecords.reduce((acc, rec) => {
             if (!acc[rec.sector]) {
                 acc[rec.sector] = { realizado: 0, programado: 0, count: 0 };
@@ -495,7 +495,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
 
     const renderOverview = () => (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <DatePickerInput
@@ -651,7 +651,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 )}
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm space-y-4 no-print transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Mês/Ano</label>
@@ -685,7 +685,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><List size={20} />Registros de Produção</h3>
                 <div className="overflow-x-auto w-full">
                     <div className="min-w-[800px]">
@@ -717,7 +717,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                                         <td className="px-6 py-4 text-center font-medium text-gray-600 dark:text-gray-300">
                                             {(() => {
                                                 const [m, y] = rec.mesAno.split('/');
-                                                // Day 0 of next month gets last day of current month
+                                                // Dia 0 do próximo mês retorna o último dia do mês atual
                                                 const daysInMonth = new Date(Number(y), Number(m), 0).getDate();
 
                                                 // Conta segundas-feiras para estimar semanas de produção

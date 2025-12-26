@@ -3,34 +3,37 @@
  */
 
 import api from '../api';
-import { AbsenteeismRecord, Sector } from '../../types';
+import { AbsenteeismRecord, AbsenceType, Sector } from '../../types';
+import { extractData } from '../helpers';
 
 const sectorMap: Record<string, Sector> = {
     'CONFEITARIA': Sector.CONFEITARIA,
     'PAES': Sector.PAES,
     'SALGADO': Sector.SALGADO,
     'PAO_DE_QUEIJO': Sector.PAO_DE_QUEIJO,
-    'EMBALADORA': Sector.EMBALADORA
+    'EMBALADORA': Sector.EMBALADORA,
+    'MANUTENCAO': Sector.MANUTENCAO
 };
 
-const absenceMap: Record<string, any> = {
-    'ATESTADO': 'Atestado',
-    'FALTA_INJUSTIFICADA': 'Falta Injustificada',
-    'BANCO_DE_HORAS': 'Banco de Horas'
+const absenceTypeMap: Record<string, AbsenceType> = {
+    'ATESTADO': AbsenceType.ATESTADO,
+    'FALTA_INJUSTIFICADA': AbsenceType.FALTA_INJUSTIFICADA,
+    'BANCO_DE_HORAS': AbsenceType.BANCO_DE_HORAS
 };
 
 const transformRecord = (record: any): AbsenteeismRecord => {
     return {
         ...record,
         sector: sectorMap[record.sector] || record.sector,
-        absenceType: absenceMap[record.absenceType] || record.absenceType
+        absenceType: absenceTypeMap[record.absenceType] || record.absenceType
     };
 };
 
 export const absenteeismService = {
     getAll: async (): Promise<AbsenteeismRecord[]> => {
         const response = await api.get('/absenteeism');
-        return response.data.data.map(transformRecord);
+        const data = extractData<any>(response.data);
+        return data.map(transformRecord);
     },
 
     getById: async (id: number): Promise<AbsenteeismRecord> => {

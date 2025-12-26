@@ -6,18 +6,29 @@
 import prisma from '../../config/database.js';
 import { AppError } from '../../middlewares/errorHandler.js';
 import logger from '../../utils/logger.js';
+import { paginate, createPaginatedResponse } from '../../utils/pagination.js';
 
-export const getAll = async () => {
-    return await prisma.maintenance.findMany({
-        orderBy: { date: 'desc' },
-    });
+export const getAll = async (page = 1, limit = 20) => {
+    const { skip, take } = paginate(page, limit);
+
+    const [data, total] = await Promise.all([
+        prisma.maintenance.findMany({
+            where: { deletedAt: null },
+            skip,
+            take,
+            orderBy: { date: 'desc' },
+        }),
+        prisma.maintenance.count({ where: { deletedAt: null } })
+    ]);
+
+    return createPaginatedResponse(data, page, limit, total);
 };
 
 export const getById = async (id) => {
     const record = await prisma.maintenance.findUnique({
         where: { id: parseInt(id) },
     });
-    if (!record) throw new AppError('Manutenção não encontrada', 404);
+    if (!record || record.deletedAt) throw new AppError('Manutenção não encontrada', 404);
     return record;
 };
 

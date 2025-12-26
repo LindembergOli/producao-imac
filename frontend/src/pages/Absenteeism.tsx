@@ -7,10 +7,11 @@ import autoTable from 'jspdf-autotable';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { ComposedChart, Bar, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, List, Plus, File, Users, Activity, TriangleAlert, Pencil, Trash2 } from 'lucide-react';
+import { TrendingUp, List, Plus, File, Users, Activity, TriangleAlert, Pencil, Trash2, Filter } from 'lucide-react';
 import Modal, { ConfirmModal } from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { absenteeismService } from '../services/modules/absenteeism';
+import { formatBrazilianNumber } from '../utils/formatters';
 import DatePickerInput from '../components/DatePickerInput';
 
 const COLORS = {
@@ -68,22 +69,30 @@ const formatDateSafe = (dateString: string) => {
   }
 };
 
+
 const AbsenteeismRecordForm: React.FC<{
   record: Partial<AbsenteeismRecord> | null;
   onSave: (record: Omit<AbsenteeismRecord, 'id'>) => void;
   onCancel: () => void;
   employees: Employee[];
 }> = ({ record, onSave, onCancel, employees }) => {
+  // Função auxiliar para converter data para formato YYYY-MM-DD
+  const formatDateForInput = (date: string | Date | undefined): string => {
+    if (!date) return new Date().toISOString().split('T')[0] || '';
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return dateObj.toISOString().split('T')[0] || '';
+  };
+
   const [formData, setFormData] = useState({
-    date: record?.date || new Date().toISOString().split('T')[0],
-    sector: record?.sector || '',
+    date: formatDateForInput(record?.date),
+    sector: (record?.sector as string) || '',
     employeeName: record?.employeeName || '',
     daysAbsent: record?.daysAbsent || 1,
-    absenceType: record?.absenceType || '',
+    absenceType: (record?.absenceType as string) || '',
   });
   const [availableEmployees, setAvailableEmployees] = useState<Employee[]>([]);
 
-  // Helper to normalize strings
+  // Função auxiliar para normalizar strings
   const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
   useEffect(() => {
@@ -121,7 +130,7 @@ const AbsenteeismRecordForm: React.FC<{
           <label className="block text-sm font-medium mb-1">Setor *</label>
           <select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass}>
             <option value="">Selecione</option>
-            {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+            {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="md:col-span-2">
@@ -180,7 +189,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
   const gridColor = isDarkMode ? '#334155' : '#f1f5f9';
   const tickColor = isDarkMode ? '#94a3b8' : '#94a3b8';
 
-  // Otimização extrema do Recharts para evitar crashes (White Screen)
+  // Otimização extrema do Recharts para evitar crashes (Tela Branca)
   const tooltipStyle = useMemo(() => ({
     backgroundColor: isDarkMode ? '#1e293b' : '#fff',
     borderColor: isDarkMode ? '#334155' : '#fff',
@@ -194,13 +203,13 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
   }), [isDarkMode]);
 
   const xAxisProps = useMemo(() => ({
-    tick: { fill: tickColor, fontSize: 9 },
+    tick: { fill: tickColor, fontSize: 11 },
     axisLine: false,
     tickLine: false,
     interval: 0,
-    angle: -45,
-    textAnchor: 'end' as const,
-    height: 70
+    angle: 0,
+    textAnchor: 'middle' as const,
+    height: 50
   }), [tickColor]);
 
   const yAxisLeftProps = useMemo(() => ({
@@ -263,6 +272,9 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
   const filteredTableRecords = useMemo(() => {
     if (!records || !Array.isArray(records)) return [];
 
+    // Função auxiliar para normalizar strings para comparação
+    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
     return records.filter(rec => {
       if (!rec || !rec.date) return false;
 
@@ -278,7 +290,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
         if (recM !== m || recY !== y) return false;
       }
 
-      if (tableFilters.sector !== 'Todos' && rec.sector !== tableFilters.sector) return false;
+      if (tableFilters.sector !== 'Todos' && normalize(String(rec.sector)) !== normalize(tableFilters.sector)) return false;
       if (tableFilters.employee && !rec.employeeName.toLowerCase().includes(tableFilters.employee.toLowerCase())) return false;
       return true;
     }).sort((a, b) => (a.sector || '').localeCompare(b.sector || ''));
@@ -350,7 +362,12 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
   }, [filteredOverviewRecords, employees, overviewFilters]);
 
   const chartDataBySector = useMemo(() => {
-    const sectors = Object.values(Sector);
+    const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+
+    // Função auxiliar para normalizar e comparar setores
+    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const sectorsMatch = (sector1: string, sector2: string) => normalize(sector1) === normalize(sector2);
+
     const employeesPerSector = Array.isArray(employees) ? employees.reduce((acc, emp) => {
       acc[emp.sector] = (acc[emp.sector] || 0) + 1;
       return acc;
@@ -359,7 +376,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
     const businessDays = kpiData.businessDays || 1;
 
     return sectors.map(sector => {
-      const sectorRecords = filteredOverviewRecords.filter(r => r.sector === sector);
+      const sectorRecords = filteredOverviewRecords.filter(r => sectorsMatch(String(r.sector), sector));
 
       const absentDaysInSector = sectorRecords.reduce((sum, r) => sum + (Number(r.daysAbsent) || 0), 0);
       const totalPossibleDaysInSector = (employeesPerSector[sector] || 0) * businessDays;
@@ -406,10 +423,16 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
   const handleSave = async (data: Omit<AbsenteeismRecord, 'id'>) => {
     if (!Array.isArray(records)) return;
     try {
+      // Converter campos de texto para maiúsculas
+      const normalizedData = {
+        ...data,
+        employeeName: data.employeeName.toUpperCase()
+      };
+
       if (currentRecord) {
-        await absenteeismService.update(currentRecord.id, data);
+        await absenteeismService.update(currentRecord.id, normalizedData);
       } else {
-        await absenteeismService.create(data);
+        await absenteeismService.create(normalizedData);
       }
       // Refetch force para garantir atualização dos gráficos e tabelas
       const updatedRecords = await absenteeismService.getAll();
@@ -464,7 +487,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
       alert("Não há dados para exportar.");
       return;
     }
-    // const { jsPDF } = (window as any).jspdf; // Removed
+    // const { jsPDF } = (window as any).jspdf; // Removido
     const doc = new jsPDF();
     doc.text("Relatório de Absenteísmo", 14, 16);
 
@@ -488,7 +511,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
 
   const renderOverview = () => (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <DatePickerInput
@@ -505,6 +528,20 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
             />
           </div>
         </div>
+        {(overviewFilters.start || overviewFilters.end) && (
+          <div className="mt-4 flex justify-end">
+            <button
+              onClick={() => setOverviewFilters({ start: '', end: '' })}
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+            >
+              🔄 Limpar Filtros
+            </button>
+          </div>
+        )}
+        <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <Filter size={16} className="text-imac-primary" />
+          <span>Mostrando <span className="font-semibold text-imac-primary">{filteredOverviewRecords.length}</span> de <span className="font-semibold">{records.length}</span> registros</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -512,7 +549,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
         <KpiCard title="Atestados" value={String(kpiData.atestados || 0)} unit="func." icon={<File />} color={COLORS.atestado} />
         <KpiCard title="Faltas Injust." value={String(kpiData.faltasInjust || 0)} unit="func." icon={<TriangleAlert />} color={COLORS.falta} />
         <KpiCard title="Banco de Horas" value={String(kpiData.bancoHoras || 0)} unit="func." icon={<Activity />} color={COLORS.banco} />
-        <KpiCard title="Taxa de Absenteísmo" value={(kpiData.taxaAbsenteismo || 0).toFixed(2)} unit="%" icon={<TrendingUp />} color={COLORS.taxa} />
+        <KpiCard title="Taxa de Absenteísmo" value={formatBrazilianNumber(kpiData.taxaAbsenteismo || 0, 2)} unit="%" icon={<TrendingUp />} color={COLORS.taxa} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -592,7 +629,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
 
   const renderRecords = () => (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm space-y-4 no-print transition-colors">
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Mês/Ano</label>
@@ -610,7 +647,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
               className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
             >
               <option value="Todos">Todos</option>
-              {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+              {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>
@@ -643,7 +680,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
         )}
       </div>
 
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
         <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><List size={20} />Registros de Ausência</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">

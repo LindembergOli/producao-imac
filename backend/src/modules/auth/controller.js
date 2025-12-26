@@ -16,6 +16,7 @@
 
 import * as authService from './service.js';
 import { success, error as errorResponse } from '../../utils/responses.js';
+import { logAudit } from '../../middlewares/audit.js';
 
 /**
  * POST /api/auth/register
@@ -27,6 +28,21 @@ import { success, error as errorResponse } from '../../utils/responses.js';
 export const register = async (req, res, next) => {
     try {
         const user = await authService.register(req.body);
+
+        // Auditar criação de usuário (sem senha)
+        await logAudit({
+            userId: user.id,
+            action: 'CREATE_USER',
+            entity: 'User',
+            entityId: user.id,
+            details: {
+                name: req.body.name,
+                email: req.body.email,
+                role: req.body.role || 'LIDER_PRODUCAO',
+            },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
 
         return success(res, {
             data: user,
@@ -49,6 +65,17 @@ export const login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
         const result = await authService.login(email, password);
+
+        // Auditar login
+        await logAudit({
+            userId: result.user.id,
+            action: 'LOGIN',
+            entity: 'User',
+            entityId: result.user.id,
+            details: { email },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
 
         return success(res, {
             data: result,
@@ -92,6 +119,19 @@ export const logout = async (req, res, next) => {
         const { refreshToken } = req.body;
         await authService.logout(refreshToken);
 
+        // Auditar logout (se usuário estiver autenticado)
+        if (req.user) {
+            await logAudit({
+                userId: req.user.id,
+                action: 'LOGOUT',
+                entity: 'User',
+                entityId: req.user.id,
+                details: {},
+                ipAddress: req.ip,
+                userAgent: req.get('user-agent'),
+            });
+        }
+
         return success(res, {
             data: null,
             message: 'Logout realizado com sucesso',
@@ -111,6 +151,17 @@ export const logout = async (req, res, next) => {
 export const logoutAll = async (req, res, next) => {
     try {
         await authService.logoutAll(req.user.id);
+
+        // Auditar logout de todos os dispositivos
+        await logAudit({
+            userId: req.user.id,
+            action: 'LOGOUT',
+            entity: 'User',
+            entityId: req.user.id,
+            details: { logoutAll: true },
+            ipAddress: req.ip,
+            userAgent: req.get('user-agent'),
+        });
 
         return success(res, {
             data: null,

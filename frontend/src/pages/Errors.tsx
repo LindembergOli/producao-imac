@@ -5,7 +5,7 @@ import { Sector, ErrorCategory } from '../types';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Pencil, Trash2, List, File, TriangleAlert, DollarSign, HelpCircle, Star, TrendingUp } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, File, TriangleAlert, DollarSign, HelpCircle, Star, TrendingUp, Filter } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Bar } from 'recharts';
@@ -13,6 +13,7 @@ import Modal, { ConfirmModal } from '../components/Modal';
 import DatePickerInput from '../components/DatePickerInput';
 import { useAuth } from '../contexts/AuthContext';
 import { errorsService } from '../services/modules/errors';
+import { formatBrazilianNumber } from '../utils/formatters';
 
 const COLORS = {
     primary: '#D99B61',
@@ -31,19 +32,27 @@ const ErrorRecordForm: React.FC<{
     products: Product[];
 }> = ({ record, onSave, onCancel, products }) => {
 
+    // Função auxiliar para converter data para formato YYYY-MM-DD
+    const formatDateForInput = (date: string | Date | undefined): string => {
+        if (!date) return new Date().toISOString().split('T')[0] || '';
+        const dateObj = typeof date === 'string' ? new Date(date) : date;
+        return dateObj.toISOString().split('T')[0] || '';
+    };
+
     const [formData, setFormData] = useState({
-        date: record?.date || new Date().toISOString().split('T')[0],
-        sector: record?.sector || '',
+        date: formatDateForInput(record?.date),
+        sector: (record?.sector as string) || '',
         product: record?.product || '',
-        category: record?.category || '',
+        category: (record?.category as string) || '',
         description: record?.description || '',
         action: record?.action || '',
         cost: record?.cost || 0,
         wastedQty: record?.wastedQty?.toString().replace('.', ',') || '',
     });
     const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+    const [isManualCost, setIsManualCost] = useState(false);
 
-    // Helper to normalize strings
+    // Função auxiliar para normalizar strings
     const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
     useEffect(() => {
@@ -58,6 +67,22 @@ const ErrorRecordForm: React.FC<{
         }
     }, [formData.sector, record?.sector, products]);
 
+    // Calcular automaticamente o custo baseado no unitCost/yield do produto * wastedQty
+    useEffect(() => {
+        if (formData.product && formData.wastedQty && !isManualCost) {
+            const selectedProduct = availableProducts.find(p => p.name === formData.product);
+            if (selectedProduct?.unitCost && selectedProduct?.yield) {
+                const wastedQtyNum = parseFloat(formData.wastedQty.replace(',', '.'));
+                if (!isNaN(wastedQtyNum) && wastedQtyNum > 0) {
+                    const calculatedCost = (selectedProduct.unitCost / selectedProduct.yield) * wastedQtyNum;
+                    // Arredondar para 2 casas decimais
+                    const roundedCost = Math.round(calculatedCost * 100) / 100;
+                    setFormData(prev => ({ ...prev, cost: roundedCost }));
+                }
+            }
+        }
+    }, [formData.product, formData.wastedQty, availableProducts, isManualCost]);
+
     const handleSave = () => {
         if (!formData.date || !formData.sector || !formData.product || !formData.category || !formData.description) {
             alert('Por favor, preencha todos os campos obrigatórios.');
@@ -71,6 +96,11 @@ const ErrorRecordForm: React.FC<{
     };
 
     const inputClass = "mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white";
+    const calculatedInputClass = "mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-gray-50 dark:bg-slate-600 dark:text-white";
+
+    // Verificar se o produto atual tem unitCost e yield para cálculo automático
+    const selectedProduct = availableProducts.find(p => p.name === formData.product);
+    const canAutoCalculate = selectedProduct?.unitCost && selectedProduct?.yield;
 
     return (
         <div className="space-y-6">
@@ -84,9 +114,13 @@ const ErrorRecordForm: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Setor *</label>
-                    <select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass}>
+                    <select
+                        value={formData.sector}
+                        onChange={(e) => setFormData({ ...formData, sector: e.target.value as Sector })}
+                        className={inputClass}
+                    >
                         <option value="">Selecione</option>
-                        {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                        {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 </div>
                 <div>
@@ -112,12 +146,35 @@ const ErrorRecordForm: React.FC<{
                     <textarea value={formData.action} onChange={e => setFormData({ ...formData, action: e.target.value })} rows={3} className={inputClass}></textarea>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Custo do Erro (R$)</label>
-                    <input type="number" step="0.01" value={formData.cost || ''} onFocus={e => e.target.select()} onChange={e => setFormData({ ...formData, cost: Number(e.target.value) })} className={inputClass} />
-                </div>
-                <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qtd. Desperdiçada (KG)</label>
                     <input type="text" inputMode="decimal" value={formData.wastedQty} onChange={e => setFormData({ ...formData, wastedQty: e.target.value })} className={inputClass} placeholder="0,000" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        Custo do Erro (R$)
+                        {canAutoCalculate && !isManualCost && (
+                            <span className="text-xs text-green-600 dark:text-green-400">(calculado automaticamente)</span>
+                        )}
+                    </label>
+                    <div className="relative">
+                        <input
+                            type="number"
+                            step="0.01"
+                            value={formData.cost || ''}
+                            onFocus={e => {
+                                e.target.select();
+                                if (canAutoCalculate) {
+                                    setIsManualCost(true);
+                                }
+                            }}
+                            onChange={e => {
+                                setFormData({ ...formData, cost: Number(e.target.value) });
+                                setIsManualCost(true);
+                            }}
+                            className={canAutoCalculate && !isManualCost ? calculatedInputClass : inputClass}
+                            title={canAutoCalculate && !isManualCost ? "Calculado automaticamente. Clique para editar manualmente." : ""}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -144,13 +201,13 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
 
     const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
-    // Filters for Overview
+    // Filtros para Visão Geral
     const [overviewFilters, setOverviewFilters] = useState({
         start: '',
         end: ''
     });
 
-    // Filters for Table
+    // Filtros para Tabela
     const [tableFilters, setTableFilters] = useState({
         mesAno: '',
         sector: 'Todos',
@@ -158,7 +215,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
         category: ''
     });
 
-    // Chart styling constants
+    // Constantes de estilo de gráficos
     const gridColor = isDarkMode ? '#334155' : '#e5e7eb';
     const tickColor = isDarkMode ? '#9ca3af' : '#6b7280';
     const tooltipStyle = {
@@ -172,16 +229,16 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
     };
 
     const xAxisProps = {
-        tick: { fill: tickColor, fontSize: 9 },
+        tick: { fill: tickColor, fontSize: 11 },
         axisLine: false,
         tickLine: false,
         interval: 0,
-        angle: -45,
-        textAnchor: 'end' as const,
-        height: 70
+        angle: 0,
+        textAnchor: 'middle' as const,
+        height: 50
     };
 
-    // Filtered Data for Overview
+    // Dados Filtrados para Visão Geral
     const filteredOverviewRecords = useMemo(() => {
         if (!Array.isArray(records)) return [];
         return records.filter(rec => {
@@ -199,9 +256,13 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
         });
     }, [records, overviewFilters]);
 
-    // Filtered Data for Table
+    // Dados Filtrados para Tabela
     const filteredTableRecords = useMemo(() => {
         if (!Array.isArray(records)) return [];
+
+        // Função auxiliar para normalizar strings para comparação
+        const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
         return records.filter(rec => {
             if (tableFilters.mesAno) {
                 const [y, m] = tableFilters.mesAno.split('-').map(Number);
@@ -209,7 +270,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                 // Ajuste para garantir comparação correta de mês/ano
                 if (recDate.getMonth() + 1 !== m || recDate.getFullYear() !== y) return false;
             }
-            if (tableFilters.sector !== 'Todos' && rec.sector !== tableFilters.sector) return false;
+            if (tableFilters.sector !== 'Todos' && normalize(String(rec.sector)) !== normalize(tableFilters.sector)) return false;
             if (tableFilters.product && !rec.product.toLowerCase().includes(tableFilters.product.toLowerCase())) return false;
             if (tableFilters.category && !rec.category.toLowerCase().includes(tableFilters.category.toLowerCase())) return false;
             return true;
@@ -242,14 +303,23 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
 
 
     const chartDataBySector = useMemo(() => {
-        const sectors = Object.values(Sector);
+        const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+
+        // Função auxiliar para normalizar e encontrar setor correspondente do enum
+        const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+        const findMatchingSector = (recSector: string): Sector => {
+            const normalizedRec = normalize(recSector);
+            return sectors.find(s => normalize(s) === normalizedRec) || recSector as Sector;
+        };
+
         const dataBySector = filteredOverviewRecords.reduce((acc, rec) => {
-            if (!acc[rec.sector]) {
-                acc[rec.sector] = { 'Quantidade': 0, 'Custo (R$)': 0, 'Desperdício (KG)': 0 };
+            const matchedSector = findMatchingSector(String(rec.sector));
+            if (!acc[matchedSector]) {
+                acc[matchedSector] = { 'Quantidade': 0, 'Custo (R$)': 0, 'Desperdício (KG)': 0 };
             }
-            acc[rec.sector]['Quantidade'] += 1;
-            acc[rec.sector]['Custo (R$)'] += rec.cost || 0;
-            acc[rec.sector]['Desperdício (KG)'] += rec.wastedQty || 0;
+            acc[matchedSector]['Quantidade'] += 1;
+            acc[matchedSector]['Custo (R$)'] += rec.cost || 0;
+            acc[matchedSector]['Desperdício (KG)'] += rec.wastedQty || 0;
             return acc;
         }, {} as Record<Sector, { 'Quantidade': number, 'Custo (R$)': number, 'Desperdício (KG)': number }>);
 
@@ -286,11 +356,19 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
     const handleSave = async (data: Omit<ErrorRecord, 'id'>) => {
         if (!Array.isArray(records)) return;
         try {
+            // Converter campos de texto para maiúsculas
+            const normalizedData = {
+                ...data,
+                product: data.product.toUpperCase(),
+                description: data.description.toUpperCase(),
+                action: data.action?.toUpperCase() || ''
+            };
+
             if (currentRecord) {
-                const updated = await errorsService.update(currentRecord.id, data);
+                const updated = await errorsService.update(currentRecord.id, normalizedData);
                 setRecords(records.map(r => r.id === currentRecord.id ? updated : r));
             } else {
-                const created = await errorsService.create(data);
+                const created = await errorsService.create(normalizedData);
                 setRecords([...records, created]);
             }
             handleCloseModal();
@@ -323,7 +401,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removed
+        // const XLSX = (window as any).XLSX; // Removido
         const dataToExport = filteredTableRecords.map(r => ({
             'Data': new Date(r.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
             'Setor': r.sector,
@@ -345,7 +423,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removed
+        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Erros de Produção", 14, 16);
         autoTable(doc, {
@@ -367,7 +445,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
 
     const renderOverview = () => (
         <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <DatePickerInput
@@ -384,12 +462,26 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                         />
                     </div>
                 </div>
+                {(overviewFilters.start || overviewFilters.end) && (
+                    <div className="mt-4 flex justify-end">
+                        <button
+                            onClick={() => setOverviewFilters({ start: '', end: '' })}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                        >
+                            🔄 Limpar Filtros
+                        </button>
+                    </div>
+                )}
+                <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                    <Filter size={16} className="text-imac-primary" />
+                    <span>Mostrando <span className="font-semibold text-imac-primary">{filteredOverviewRecords.length}</span> de <span className="font-semibold">{records.length}</span> registros</span>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 <KpiCard title="Total de Erros" value={String(kpiData.totalErrors)} unit="" icon={<TriangleAlert />} color={'#F3C78A'} />
-                <KpiCard title="Custo Total" value={kpiData.totalCost.toFixed(2)} unit="R$" icon={<DollarSign />} color={'#E74C3C'} />
-                <KpiCard title="Total Desperdiçado (KG)" value={kpiData.totalWasted.toFixed(3)} unit="KG" icon={<Trash2 />} color={'#EF4444'} />
+                <KpiCard title="Custo Total" value={formatBrazilianNumber(kpiData.totalCost, 2)} unit="R$" icon={<DollarSign />} color={'#E74C3C'} />
+                <KpiCard title="Total Desperdiçado (KG)" value={formatBrazilianNumber(kpiData.totalWasted, 3)} unit="KG" icon={<Trash2 />} color={'#EF4444'} />
                 <KpiCard title="Erro Mais Comum" value={kpiData.mostCommonError} unit="" icon={<HelpCircle />} color={'#D99B61'} enableWrap={true} />
                 <KpiCard title="Setor Destaque" value={kpiData.highlightSector} unit="" icon={<Star />} color={'#B36B3C'} />
             </div>
@@ -404,7 +496,6 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                 {...xAxisProps}
                             />
                             <YAxis yAxisId="left" tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="right" orientation="right" tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <YAxis yAxisId="right" orientation="right" tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip content={({ active, payload, label }) => {
                                 if (active && payload && payload.length) {
@@ -421,7 +512,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                 return null;
                             }} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
-                            <Bar yAxisId="left" dataKey="Quantidade" fill={COLORS.secondary} barSize={20} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="left" dataKey="Quantidade" fill={COLORS.secondary} barSize={24} radius={[4, 4, 0, 0]} />
                             <Line yAxisId="right" type="monotone" dataKey="Custo (R$)" stroke={COLORS.tertiary} strokeWidth={2} dot={false} />
                             <Line yAxisId="right" dataKey="Desperdício (KG)" stroke="#00000000" strokeWidth={0} dot={false} activeDot={false} legendType="none" />
                         </ComposedChart>
@@ -440,7 +531,6 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                     cy="50%"
                                     innerRadius={60}
                                     outerRadius={100}
-                                    label
                                     stroke={isDarkMode ? '#1e293b' : '#fff'}
                                 >
                                     {chartDataByCategory.map((entry, index) => (
@@ -495,7 +585,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                 )}
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm space-y-4 no-print transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Mês/Ano</label>
@@ -539,7 +629,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm transition-colors">
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><TriangleAlert size={20} />Registros de Erros</h3>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">

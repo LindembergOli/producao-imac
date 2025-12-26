@@ -4,6 +4,7 @@
 
 import api from '../api';
 import { ProductionSpeedRecord, Sector } from '../../types';
+import { extractData } from '../helpers';
 
 const sectorMap: Record<string, Sector> = {
     'CONFEITARIA': Sector.CONFEITARIA,
@@ -23,7 +24,9 @@ const transformRecord = (record: any): ProductionSpeedRecord => {
 export const productionService = {
     getAll: async (): Promise<ProductionSpeedRecord[]> => {
         const response = await api.get('/production');
-        return response.data.data.map(transformRecord);
+        // Suporta tanto resposta paginada quanto array direto
+        const data = extractData<any>(response.data);
+        return data.map(transformRecord);
     },
 
     getById: async (id: number): Promise<ProductionSpeedRecord> => {

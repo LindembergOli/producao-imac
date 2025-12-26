@@ -5,6 +5,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import type { ProductionSpeedRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord, Employee } from '../types';
 import { Sector, Unit } from '../types';
 import { Activity, TrendingDown, TriangleAlert, Wrench, UserMinus, DollarSign } from 'lucide-react';
+import { maintenanceService } from '../services/modules/maintenance';
+import { formatBrazilianNumber } from '../utils/formatters';
 import DatePickerInput from '../components/DatePickerInput';
 
 const COLORS = {
@@ -49,7 +51,22 @@ interface DashboardProps {
   isDarkMode: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorRecords, maintenanceRecords, absenteeismRecords, employees, isDarkMode }) => {
+const Dashboard: React.FC<DashboardProps> = ({
+  speedRecords,
+  lossRecords,
+  errorRecords,
+  maintenanceRecords,
+  absenteeismRecords,
+  employees,
+  isDarkMode
+}) => {
+  // Função auxiliar para normalizar nomes de setores (remove acentos, maiúsculas)
+  const normalizeSector = (sector: string): string => {
+    return sector
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase();
+  };
 
   // Estado inicial: Strings vazias para mostrar "Todo o período"
   const [dateRange, setDateRange] = useState({
@@ -59,7 +76,6 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
 
   // Filtrar registros para visualização no dashboard
   const { filteredSpeed, filteredLoss, filteredError, filteredMaintenance, filteredAbsenteeism } = useMemo(() => {
-
     // Definir lógica de filtro
     const filterByDate = (records: any[], dateField: string = 'date') => {
       // Verificação de segurança: garantir que records é um array
@@ -91,13 +107,15 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
       });
     };
 
-    return {
+    const result = {
       filteredSpeed: filterByDate(speedRecords, 'mesAno'),
       filteredLoss: filterByDate(lossRecords, 'date'),
       filteredError: filterByDate(errorRecords, 'date'),
       filteredMaintenance: filterByDate(maintenanceRecords, 'date'),
       filteredAbsenteeism: filterByDate(absenteeismRecords, 'date')
     };
+
+    return result;
   }, [dateRange, speedRecords, lossRecords, errorRecords, maintenanceRecords, absenteeismRecords]);
 
 
@@ -138,7 +156,7 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
     if (dateRange.start) {
       effectiveStartDate = new Date(dateRange.start);
     } else {
-      // Default behavior: Start of current month (Same as Absenteeism module)
+      // Comportamento padrão: Início do mês atual (Igual ao módulo Absenteísmo)
       effectiveStartDate = new Date();
       effectiveStartDate.setDate(1);
     }
@@ -146,7 +164,7 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
     if (dateRange.end) {
       effectiveEndDate = new Date(dateRange.end);
     } else {
-      // Default behavior: Today
+      // Comportamento padrão: Hoje
       effectiveEndDate = new Date();
     }
 
@@ -191,29 +209,32 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
   }, [filteredLoss, filteredError]);
 
   const chartData = useMemo(() => {
-    const sectors = Object.values(Sector);
+    const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
 
     const speedBySector = filteredSpeed.reduce((acc, rec) => {
-      if (!acc[rec.sector]) acc[rec.sector] = { p: 0, r: 0 };
-      acc[rec.sector].p += rec.totalProgramado;
-      acc[rec.sector].r += rec.totalRealizado;
+      const normalizedSector = normalizeSector(rec.sector);
+      if (!acc[normalizedSector]) acc[normalizedSector] = { p: 0, r: 0 };
+      acc[normalizedSector].p += rec.totalProgramado;
+      acc[normalizedSector].r += rec.totalRealizado;
       return acc;
-    }, {} as Record<Sector, { p: number, r: number }>);
+    }, {} as Record<string, { p: number, r: number }>);
 
     const lossesBySector = filteredLoss.reduce((acc, rec) => {
-      if (!acc[rec.sector]) acc[rec.sector] = { q: 0, c: 0 };
-      if (rec.unit === Unit.KG) acc[rec.sector].q += rec.quantity;
-      acc[rec.sector].c += rec.totalCost;
+      const normalizedSector = normalizeSector(rec.sector);
+      if (!acc[normalizedSector]) acc[normalizedSector] = { q: 0, c: 0 };
+      if (rec.unit === Unit.KG) acc[normalizedSector].q += rec.quantity;
+      acc[normalizedSector].c += rec.totalCost;
       return acc;
-    }, {} as Record<Sector, { q: number, c: number }>);
+    }, {} as Record<string, { q: number, c: number }>);
 
     const errorsBySector = filteredError.reduce((acc, rec) => {
-      if (!acc[rec.sector]) acc[rec.sector] = { q: 0, c: 0, w: 0 };
-      acc[rec.sector].q += 1;
-      acc[rec.sector].c += rec.cost;
-      acc[rec.sector].w += rec.wastedQty || 0;
+      const normalizedSector = normalizeSector(rec.sector);
+      if (!acc[normalizedSector]) acc[normalizedSector] = { q: 0, c: 0, w: 0 };
+      acc[normalizedSector].q += 1;
+      acc[normalizedSector].c += rec.cost;
+      acc[normalizedSector].w += rec.wastedQty || 0;
       return acc;
-    }, {} as Record<Sector, { q: number, c: number, w: number }>);
+    }, {} as Record<string, { q: number, c: number, w: number }>);
 
     const employeesPerSector = Array.isArray(employees)
       ? employees.reduce((acc, emp) => {
@@ -225,18 +246,20 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
     const businessDays = kpiData.businessDays;
 
     const absenteeismBySector = filteredAbsenteeism.reduce((acc, rec) => {
-      if (!acc[rec.sector]) acc[rec.sector] = 0;
-      acc[rec.sector] += rec.daysAbsent;
+      const normalizedSector = normalizeSector(rec.sector);
+      if (!acc[normalizedSector]) acc[normalizedSector] = 0;
+      acc[normalizedSector] += rec.daysAbsent;
       return acc;
-    }, {} as Record<Sector, number>);
+    }, {} as Record<string, number>);
 
     return sectors.map(s => {
-      const speed = speedBySector[s];
-      const losses = lossesBySector[s];
-      const errors = errorsBySector[s];
+      const normalizedSector = normalizeSector(s);
+      const speed = speedBySector[normalizedSector];
+      const losses = lossesBySector[normalizedSector];
+      const errors = errorsBySector[normalizedSector];
 
       const totalPossibleDaysInSector = (employeesPerSector[s] || 0) * businessDays;
-      const daysAbsentInSector = absenteeismBySector[s] || 0;
+      const daysAbsentInSector = absenteeismBySector[normalizedSector] || 0;
       const absenteeismRate = totalPossibleDaysInSector > 0 ? (daysAbsentInSector / totalPossibleDaysInSector) * 100 : 0;
 
       return {
@@ -255,15 +278,56 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
 
   const maintenanceData = useMemo(() => {
     const stopsBySectorData = filteredMaintenance.reduce((acc, rec) => {
-      acc[rec.sector] = (acc[rec.sector] || 0) + 1;
+      const normalizedSector = normalizeSector(rec.sector);
+      if (!acc[normalizedSector]) acc[normalizedSector] = 0;
+      acc[normalizedSector] += 1;
       return acc;
-    }, {} as Record<Sector, number>);
+    }, {} as Record<string, number>);
 
-    return Object.values(Sector).map(sector => ({
-      name: sector,
-      'Ordens de Manutenção': stopsBySectorData[sector] || 0,
-    }));
+    const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+    return sectors.map(sector => {
+      const normalizedSector = normalizeSector(sector);
+      return {
+        name: sector,
+        'Ordens de Manutenção': stopsBySectorData[normalizedSector] || 0,
+      };
+    });
   }, [filteredMaintenance]);
+
+  const absenteeismChartData = useMemo(() => {
+    const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+
+    const employeesPerSector = Array.isArray(employees)
+      ? employees.reduce((acc, emp) => {
+        acc[emp.sector] = (acc[emp.sector] || 0) + 1;
+        return acc;
+      }, {} as Record<Sector, number>)
+      : ({} as Record<Sector, number>);
+
+    const businessDays = kpiData.businessDays || 1;
+
+    const absenteeismBySector = filteredAbsenteeism.reduce((acc, rec) => {
+      const normalizedSector = normalizeSector(rec.sector);
+      if (!acc[normalizedSector]) acc[normalizedSector] = 0;
+      acc[normalizedSector] += rec.daysAbsent;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const result = sectors.map((sector) => {
+      const normalizedSector = normalizeSector(sector);
+      const totalPossibleDaysInSector = (employeesPerSector[sector] || 0) * businessDays;
+      const daysAbsentInSector = absenteeismBySector[normalizedSector] || 0;
+      const absenteeismRate =
+        totalPossibleDaysInSector > 0 ? (daysAbsentInSector / totalPossibleDaysInSector) * 100 : 0;
+
+      return {
+        name: sector,
+        'Taxa de Absenteísmo %': absenteeismRate,
+      };
+    });
+
+    return result;
+  }, [filteredAbsenteeism, employees, kpiData.businessDays]);
 
   // Constantes de estilização dos gráficos
   const gridColor = isDarkMode ? '#334155' : '#f1f5f9';
@@ -277,13 +341,13 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
   };
 
   const xAxisProps = {
-    tick: { fill: tickColor, fontSize: 9 },
+    tick: { fill: tickColor, fontSize: 11 },
     axisLine: false,
     tickLine: false,
     interval: 0,
-    angle: -45,
-    textAnchor: 'end' as const,
-    height: 70
+    angle: 0,
+    textAnchor: 'middle' as const,
+    height: 50
   };
 
   return (
@@ -293,7 +357,7 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
         <p className="text-md text-slate-500 dark:text-slate-400 mt-1">Os principais indicadores do setor produtivo em tempo real.</p>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 transition-colors duration-300">
+      <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-all duration-300">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
           <div>
             <DatePickerInput
@@ -313,14 +377,14 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4">
-        <KpiCard title="Velocidade" value={kpiData.velocidade.toFixed(1)} unit="%" icon={<Activity />} color={COLORS.primary} />
-        <KpiCard title="Perdas Totais" value={kpiData.perdasTotais.toFixed(1)} unit="KG" icon={<TrendingDown />} color={COLORS.error} />
+        <KpiCard title="Velocidade" value={formatBrazilianNumber(kpiData.velocidade, 1)} unit="%" icon={<Activity />} color={COLORS.primary} />
+        <KpiCard title="Perdas Totais" value={formatBrazilianNumber(kpiData.perdasTotais, 1)} unit="KG" icon={<TrendingDown />} color={COLORS.error} />
         <KpiCard title="Erros" value={String(kpiData.errosProducao)} unit="" icon={<TriangleAlert />} color={'#F59E0B'} />
         <KpiCard title="Manutenção" value={String(kpiData.ordensManutencao)} unit="ordens" icon={<Wrench />} color={COLORS.tertiary} />
-        <KpiCard title="Absenteísmo" value={kpiData.taxaAbsenteismo.toFixed(2)} unit="%" icon={<UserMinus />} color={COLORS.success} />
+        <KpiCard title="Absenteísmo" value={formatBrazilianNumber(kpiData.taxaAbsenteismo, 2)} unit="%" icon={<UserMinus />} color={COLORS.success} />
         <KpiCard
           title="Custo Total (R$)"
-          value={kpiData.custoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          value={formatBrazilianNumber(kpiData.custoTotal, 2)}
           unit="R$"
           icon={<DollarSign />}
           color={'#EF4444'}
@@ -338,7 +402,7 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
                 contentStyle={tooltipStyle}
                 formatter={(value) => [`R$ ${Number(value).toFixed(2)}`, 'Custo Total']}
               />
-              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} iconType="circle" />
+              <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
               <Line type="monotone" dataKey="Custo Total (R$)" stroke="#EF4444" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -356,7 +420,7 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
                 contentStyle={tooltipStyle}
                 formatter={(value, name) => name === 'Velocidade %' ? [`${Number(value).toFixed(2)}%`, name] : [value, name]}
               />
-              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} iconType="circle" />
+              <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
               <Bar dataKey="Velocidade %" fill={COLORS.primary} barSize={24} radius={[4, 4, 0, 0]} />
               <Line type="monotone" dataKey="Meta" stroke={COLORS.tertiary} strokeWidth={2} dot={false} strokeDasharray="4 4" />
             </ComposedChart>
@@ -388,7 +452,7 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
                   return null;
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} iconType="circle" />
+              <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
               <Bar yAxisId="left" dataKey="Perdas (KG)" fill={COLORS.error} barSize={24} radius={[4, 4, 0, 0]} />
               <Line yAxisId="right" type="monotone" dataKey="Custo (R$) Perdas" name="Custo (R$)" stroke={COLORS.tertiary} dot={false} strokeWidth={2} />
             </ComposedChart>
@@ -421,7 +485,7 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
                   return null;
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} iconType="circle" />
+              <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
               <Bar yAxisId="left" dataKey="Quantidade" fill={COLORS.secondary} barSize={24} radius={[4, 4, 0, 0]} />
               <Line yAxisId="right" type="monotone" dataKey="Custo (R$) Erros" name="Custo (R$)" stroke={COLORS.tertiary} strokeWidth={2} dot={false} />
             </ComposedChart>
@@ -430,16 +494,22 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
 
         <ChartContainer title="Manutenção por Setor">
           {filteredMaintenance.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" key={`maintenance-${maintenanceRecords.length}-${JSON.stringify(maintenanceData)}`}>
               <BarChart data={maintenanceData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                 <XAxis
                   dataKey="name"
                   {...xAxisProps}
                 />
-                <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis
+                  tick={{ fill: tickColor, fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                  domain={[0, 'auto']}
+                />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} iconType="circle" />
+                <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
                 <Bar dataKey="Ordens de Manutenção" fill={COLORS.tertiary} barSize={30} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -451,21 +521,28 @@ const Dashboard: React.FC<DashboardProps> = ({ speedRecords, lossRecords, errorR
         </ChartContainer>
 
         <ChartContainer title="Taxa de Absenteísmo por Setor">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+          <ResponsiveContainer width="100%" height="100%" key={`absenteeism-${absenteeismRecords.length}-${JSON.stringify(absenteeismChartData)}`}>
+            <ComposedChart data={absenteeismChartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis
                 dataKey="name"
                 {...xAxisProps}
+                padding={{ left: 70, right: 70 }}
               />
-              <YAxis tickFormatter={(tick) => `${Number(tick).toFixed(1)}%`} tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis
+                tickFormatter={(tick) => `${Number(tick).toFixed(1)}%`}
+                tick={{ fill: tickColor, fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+                domain={[0, 'auto']}
+              />
               <Tooltip
                 contentStyle={tooltipStyle}
-                formatter={(value) => [`${Number(value).toFixed(2)}%`, 'Taxa']}
+                formatter={(value) => [`${Number(value).toFixed(2)}%`, 'Taxa de Absenteísmo']}
               />
-              <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} iconType="circle" />
-              <Bar dataKey="Taxa de Absenteísmo %" fill={COLORS.success} barSize={30} radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
+              <Line type="monotone" dataKey="Taxa de Absenteísmo %" stroke={COLORS.success} strokeWidth={2} dot={false} />
+            </ComposedChart>
           </ResponsiveContainer>
         </ChartContainer>
 

@@ -6,17 +6,21 @@ const sectorMap = {
     'Salgado': 'SALGADO',
     'Pão de Queijo': 'PAO_DE_QUEIJO',
     'Embaladora': 'EMBALADORA',
+    'Manutenção': 'MANUTENCAO',
     // Backend Compat
     'CONFEITARIA': 'CONFEITARIA',
     'PAES': 'PAES',
     'SALGADO': 'SALGADO',
     'PAO_DE_QUEIJO': 'PAO_DE_QUEIJO',
-    'EMBALADORA': 'EMBALADORA'
+    'PAO DE QUEIJO': 'PAO_DE_QUEIJO',  // Aceitar com espaço também
+    'PÃO DE QUEIJO': 'PAO_DE_QUEIJO',  // Aceitar com acento e espaço
+    'EMBALADORA': 'EMBALADORA',
+    'MANUTENCAO': 'MANUTENCAO'
 };
 
 const FrontSectorEnum = z.enum([
-    'Confeitaria', 'Pães', 'Salgado', 'Pão de Queijo', 'Embaladora',
-    'CONFEITARIA', 'PAES', 'SALGADO', 'PAO_DE_QUEIJO', 'EMBALADORA'
+    'Confeitaria', 'Pães', 'Salgado', 'Pão de Queijo', 'Embaladora', 'Manutenção',
+    'CONFEITARIA', 'PAES', 'SALGADO', 'PAO_DE_QUEIJO', 'PAO DE QUEIJO', 'PÃO DE QUEIJO', 'EMBALADORA', 'MANUTENCAO'
 ]);
 
 const baseSchema = z.object({
