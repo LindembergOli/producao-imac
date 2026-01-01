@@ -348,8 +348,3 @@ const chartConfig = {
 - **Recharts:** https://recharts.org/
 - **Lucide Icons:** https://lucide.dev/
 - **Axios:** https://axios-http.com/
-
----
-
-**Última Atualização:** Dezembro 2025  
-**Versão:** 1.5.0

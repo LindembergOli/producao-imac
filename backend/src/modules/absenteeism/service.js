@@ -16,7 +16,11 @@ export const getAll = async (page = 1, limit = 20) => {
             where: { deletedAt: null },
             skip,
             take,
-            orderBy: { date: 'desc' },
+            orderBy: [
+                { date: 'desc' },          // 1º: Data mais recente primeiro
+                { sector: 'asc' },         // 2º: Setor em ordem alfabética
+                { employeeName: 'asc' }    // 3º: Funcionário em ordem alfabética
+            ],
         }),
         prisma.absenteeism.count({ where: { deletedAt: null } })
     ]);

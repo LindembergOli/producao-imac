@@ -1,9 +1,5 @@
 # Governança de Dados - IMAC Congelados
 
-**Versão:** 1.0  
-**Data:** 18/12/2024  
-**Status:** Ativo
-
 ---
 
 ## 📋 Índice
@@ -398,13 +394,3 @@ Este documento deve ser revisado:
 - **Trimestralmente** - Verificar se políticas estão sendo seguidas
 - **Quando houver mudanças** - Atualizar políticas conforme necessário
 - **Após auditorias** - Incorporar feedback
-
-**Última Revisão:** 18/12/2024  
-**Próxima Revisão:** 18/03/2025  
-**Responsável:** Equipe de Desenvolvimento
-
----
-
-**Versão:** 1.0  
-**Aprovado por:** [Nome do Responsável]  
-**Data de Aprovação:** 18/12/2024

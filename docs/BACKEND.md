@@ -388,33 +388,6 @@ export const create = async (req, res, next) => {
   const sanitized = sanitizeInput(req.body);
   // Processar dados sanitizados
 };
-```
-
----
-
-## Testes
-
-### Estrutura de Testes
-
-```
-tests/
-├── unit/           # Testes unitários
-├── integration/    # Testes de integração
-└── e2e/            # Testes end-to-end
-```
-
-### Exemplo de Teste
-
-```javascript
-import { describe, it, expect } from 'vitest';
-import { normalize } from '../utils/helpers.js';
-
-describe('normalize', () => {
-  it('deve remover acentos e converter para maiúsculas', () => {
-    expect(normalize('São Paulo')).toBe('SAO PAULO');
-  });
-});
-```
 
 ---
 
@@ -486,8 +459,3 @@ npm run lint
 - ✅ Caching quando apropriado
 - ✅ Paginação para listas grandes
 - ✅ Compressão de respostas
-
----
-
-**Última Atualização:** Dezembro 2025  
-**Versão:** 1.5.0

@@ -224,16 +224,3 @@ curl http://localhost:3001/api/employees
 - `winston` - Logging
 - `express-rate-limit` - Rate limiting
 
-## 🔄 Próximos Passos
-
-- [ ] Implementar autenticação JWT completa
-- [ ] Criar seeds com dados mock
-- [ ] Adicionar testes unitários
-- [ ] Documentar API com Swagger
-- [ ] Implementar logging com Winston
-- [ ] Adicionar paginação nas listagens
-- [ ] Implementar filtros e busca
-
-## 📄 Licença
-
-MIT

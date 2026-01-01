@@ -16,7 +16,11 @@ export const getAll = async (page = 1, limit = 20) => {
             where: { deletedAt: null },
             skip,
             take,
-            orderBy: { date: 'desc' },
+            orderBy: [
+                { date: 'desc' },      // 1º: Data mais recente primeiro
+                { sector: 'asc' },     // 2º: Setor em ordem alfabética
+                { machine: 'asc' }     // 3º: Máquina em ordem alfabética
+            ],
         }),
         prisma.maintenance.count({ where: { deletedAt: null } })
     ]);

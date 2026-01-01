@@ -2,15 +2,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { ErrorRecord, Product } from '../types';
 import { Sector, ErrorCategory } from '../types';
+import { formatChartNumber } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Plus, Pencil, Trash2, List, File, TriangleAlert, DollarSign, HelpCircle, Star, TrendingUp, Filter } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Bar } from 'recharts';
+import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Bar, LabelList } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
 import DatePickerInput from '../components/DatePickerInput';
+import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
 import { errorsService } from '../services/modules/errors';
 import { formatBrazilianNumber } from '../utils/formatters';
@@ -125,10 +127,14 @@ const ErrorRecordForm: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Produto *</label>
-                    <select value={formData.product} onChange={e => setFormData({ ...formData, product: e.target.value })} disabled={!formData.sector} className={`${inputClass} disabled:bg-gray-100 dark:disabled:bg-slate-800`}>
-                        <option value="">{formData.sector ? 'Selecione' : 'Selecione um setor primeiro'}</option>
-                        {availableProducts.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                    </select>
+                    <AutocompleteInput
+                        value={formData.product}
+                        onChange={(value) => setFormData({ ...formData, product: value })}
+                        options={availableProducts.map(p => ({ id: p.id, name: p.name }))}
+                        placeholder={formData.sector ? 'Digite o nome do produto...' : 'Selecione um setor primeiro'}
+                        disabled={!formData.sector}
+                        emptyMessage="Nenhum produto encontrado para este setor"
+                    />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Categoria *</label>
@@ -274,7 +280,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
             if (tableFilters.product && !rec.product.toLowerCase().includes(tableFilters.product.toLowerCase())) return false;
             if (tableFilters.category && !rec.category.toLowerCase().includes(tableFilters.category.toLowerCase())) return false;
             return true;
-        }).sort((a, b) => a.sector.localeCompare(b.sector));
+        }); // Ordenação removida - agora vem do backend (data DESC, setor ASC, produto ASC)
     }, [records, tableFilters]);
 
 
@@ -365,12 +371,14 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
             };
 
             if (currentRecord) {
-                const updated = await errorsService.update(currentRecord.id, normalizedData);
-                setRecords(records.map(r => r.id === currentRecord.id ? updated : r));
+                await errorsService.update(currentRecord.id, normalizedData);
             } else {
-                const created = await errorsService.create(normalizedData);
-                setRecords([...records, created]);
+                await errorsService.create(normalizedData);
             }
+
+            // Recarregar todos os registros para garantir ordenação correta do backend
+            const updatedRecords = await errorsService.getAll();
+            setRecords(updatedRecords);
             handleCloseModal();
         } catch (error) {
             console.error('Erro ao salvar erro:', error);
@@ -489,7 +497,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartContainer title="Erros por Setor">
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartDataBySector} margin={{ top: 5, right: 20, left: -20, bottom: 20 }}>
+                        <ComposedChart data={chartDataBySector} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                             <XAxis
                                 dataKey="name"
@@ -512,7 +520,9 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                 return null;
                             }} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
-                            <Bar yAxisId="left" dataKey="Quantidade" fill={COLORS.secondary} barSize={24} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="left" dataKey="Quantidade" fill={COLORS.secondary} barSize={45} radius={[4, 4, 0, 0]}>
+                                <LabelList dataKey="Quantidade" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#F3C78A', fontSize: 16, fontWeight: 600 }} />
+                            </Bar>
                             <Line yAxisId="right" type="monotone" dataKey="Custo (R$)" stroke={COLORS.tertiary} strokeWidth={2} dot={false} />
                             <Line yAxisId="right" dataKey="Desperdício (KG)" stroke="#00000000" strokeWidth={0} dot={false} activeDot={false} legendType="none" />
                         </ComposedChart>
@@ -532,6 +542,8 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                     innerRadius={60}
                                     outerRadius={100}
                                     stroke={isDarkMode ? '#1e293b' : '#fff'}
+                                    label={({ name, value }) => `${name}: ${formatChartNumber(Number(value))}`}
+                                    labelLine={{ stroke: isDarkMode ? '#94a3b8' : '#64748b', strokeWidth: 1 }}
                                 >
                                     {chartDataByCategory.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS.pie[index % COLORS.pie.length]} />
@@ -656,7 +668,7 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                     <td className="px-6 py-4">{new Date(rec.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
                                     <td className="px-6 py-4">{rec.sector}</td>
                                     <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-800 dark:text-gray-100">{rec.product}</td>
-                                    <td className="px-6 py-4">{rec.category}</td>
+                                    <td className="px-6 py-4">{rec.category.toUpperCase()}</td>
                                     <td className="px-6 py-4 truncate max-w-xs">{rec.description}</td>
                                     <td className="px-6 py-4 truncate max-w-xs">{rec.action || '-'}</td>
                                     <td className="px-6 py-4 text-right font-medium text-red-500">{rec.wastedQty ? `${rec.wastedQty}` : '-'}</td>

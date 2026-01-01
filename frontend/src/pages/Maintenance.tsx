@@ -1,16 +1,18 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { MaintenanceRecord, Machine, Employee } from '../types';
 import { Sector, MaintenanceStatus } from '../types';
+import { formatChartNumber } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Plus, Wrench, TriangleAlert, Activity, TrendingUp, List, File, Pencil, Trash2, Filter } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart } from 'recharts';
+import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, LabelList, Area } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
 import DatePickerInput from '../components/DatePickerInput';
 import TimePickerInput from '../components/TimePickerInput';
+import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
 import { maintenanceService } from '../services/modules/maintenance';
 
@@ -56,6 +58,29 @@ const formatDuration = (decimalHours: number) => {
     }
 
     return `${hours}h ${minutes.toString().padStart(2, '0')}min`;
+};
+
+// Função para determinar status do MTTR (Mean Time To Repair)
+const getMTTRStatus = (mttrHours: number): { color: string; label: string; description: string } => {
+    if (mttrHours < 2) {
+        return {
+            color: '#2ECC71',
+            label: '🟢 EXCELENTE',
+            description: 'MTTR abaixo de 2h indica manutenção eficiente, equipe treinada e boa disponibilidade de peças.'
+        };
+    } else if (mttrHours <= 4) {
+        return {
+            color: '#F59E0B',
+            label: '🟡 ATENÇÃO',
+            description: 'MTTR entre 2-4h está dentro da média industrial, mas há espaço para otimização.'
+        };
+    } else {
+        return {
+            color: '#E74C3C',
+            label: '🔴 CRÍTICO',
+            description: 'MTTR acima de 4h indica problemas. Implemente manutenção preventiva e treine a equipe.'
+        };
+    }
 };
 
 const MaintenanceRecordForm: React.FC<{
@@ -171,56 +196,34 @@ const MaintenanceRecordForm: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome da Máquina *</label>
-                    <select value={formData.machine} onChange={e => setFormData({ ...formData, machine: e.target.value })} disabled={!formData.sector} className={`${inputClass} disabled:bg-gray-100 dark:disabled:bg-slate-800`}>
-                        <option value="">{formData.sector ? 'Selecione' : 'Selecione um setor primeiro'}</option>
-                        {availableMachines.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                    </select>
+                    <AutocompleteInput
+                        value={formData.machine}
+                        onChange={(value) => setFormData({ ...formData, machine: value })}
+                        options={availableMachines.map(m => ({ id: m.id, name: m.name }))}
+                        placeholder={formData.sector ? 'Digite o nome da máquina...' : 'Selecione um setor primeiro'}
+                        disabled={!formData.sector}
+                        emptyMessage="Nenhuma máquina encontrada para este setor"
+                    />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Solicitante</label>
-                    {availableRequesters.length > 0 ? (
-                        <select
-                            value={formData.requester}
-                            onChange={e => setFormData({ ...formData, requester: e.target.value })}
-                            className={inputClass}
-                        >
-                            <option value="">Selecione</option>
-                            {availableRequesters.map(emp => (
-                                <option key={emp.id} value={emp.name}>{emp.name}</option>
-                            ))}
-                        </select>
-                    ) : (
-                        <input
-                            type="text"
-                            value={formData.requester}
-                            onChange={e => setFormData({ ...formData, requester: e.target.value })}
-                            className={inputClass}
-                            placeholder="Digite o nome do solicitante"
-                        />
-                    )}
+                    <AutocompleteInput
+                        value={formData.requester}
+                        onChange={(value) => setFormData({ ...formData, requester: value })}
+                        options={availableRequesters.map(emp => ({ id: emp.id, name: emp.name }))}
+                        placeholder="Digite o nome do solicitante..."
+                        emptyMessage="Nenhum funcionário encontrado"
+                    />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Técnico</label>
-                    {availableTechnicians.length > 0 ? (
-                        <select
-                            value={formData.technician}
-                            onChange={e => setFormData({ ...formData, technician: e.target.value })}
-                            className={inputClass}
-                        >
-                            <option value="">Selecione</option>
-                            {availableTechnicians.map(emp => (
-                                <option key={emp.id} value={emp.name}>{emp.name}</option>
-                            ))}
-                        </select>
-                    ) : (
-                        <input
-                            type="text"
-                            value={formData.technician}
-                            onChange={e => setFormData({ ...formData, technician: e.target.value })}
-                            className={inputClass}
-                            placeholder="Digite o nome do técnico"
-                        />
-                    )}
+                    <AutocompleteInput
+                        value={formData.technician}
+                        onChange={(value) => setFormData({ ...formData, technician: value })}
+                        options={availableTechnicians.map(emp => ({ id: emp.id, name: emp.name }))}
+                        placeholder="Digite o nome do técnico..."
+                        emptyMessage="Nenhum técnico encontrado"
+                    />
                 </div>
                 <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição do Problema *</label>
@@ -339,8 +342,8 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
         interval: 0
     }), [tickColor]);
 
-    const chartMargin = useMemo(() => ({ top: 10, right: 10, left: -10, bottom: 20 }), []);
-    const chartVerticalMargin = useMemo(() => ({ top: 0, right: 20, left: 20, bottom: 0 }), []);
+    const chartMargin = useMemo(() => ({ top: 20, right: 30, left: -10, bottom: 20 }), []);
+    const chartVerticalMargin = useMemo(() => ({ top: 0, right: 40, left: 20, bottom: 0 }), []);
     const legendStyle = useMemo(() => ({ fontSize: '14px', paddingTop: '10px' }), []);
     const lineDotProps = useMemo(() => ({ r: 4, fill: 'white', strokeWidth: 2 }), []);
     const lineActiveDotProps = useMemo(() => ({ r: 6 }), []);
@@ -399,7 +402,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
             if (tableFilters.status !== 'Todos' && rec.status !== tableFilters.status) return false;
             if (tableFilters.machine && !rec.machine.toLowerCase().includes(tableFilters.machine.toLowerCase())) return false;
             return true;
-        }).sort((a, b) => (a.sector || '').localeCompare(b.sector || ''));
+        }); // Ordenação removida - agora vem do backend (data DESC, setor ASC, máquina ASC)
     }, [records, tableFilters]);
 
     const kpiData = useMemo(() => {
@@ -407,7 +410,11 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
         const openOrders = filteredOverviewRecords.filter(r => r.status === MaintenanceStatus.EM_ABERTO).length;
         const closedOrders = filteredOverviewRecords.filter(r => r.status === MaintenanceStatus.FECHADO).length;
         const totalDowntimeHours = filteredOverviewRecords.reduce((total, record) => total + (Number(record.durationHours) || 0), 0);
-        return { totalOrders, openOrders, closedOrders, totalDowntimeHours };
+
+        // Calcular MTTR (Mean Time To Repair) = Tempo Total / Número de Paradas
+        const mttr = totalOrders > 0 ? totalDowntimeHours / totalOrders : 0;
+
+        return { totalOrders, openOrders, closedOrders, totalDowntimeHours, mttr };
     }, [filteredOverviewRecords]);
 
     const stopsBySectorData = useMemo(() => {
@@ -545,12 +552,14 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
 
         try {
             if (currentRecord) {
-                const updated = await maintenanceService.update(currentRecord.id, { ...normalizedData, durationHours });
-                setRecords(records.map(r => r.id === currentRecord.id ? updated : r));
+                await maintenanceService.update(currentRecord.id, { ...normalizedData, durationHours });
             } else {
-                const created = await maintenanceService.create({ ...normalizedData, durationHours });
-                setRecords([...records, created]);
+                await maintenanceService.create({ ...normalizedData, durationHours });
             }
+
+            // Recarregar todos os registros para garantir ordenação correta do backend
+            const updatedRecords = await maintenanceService.getAll();
+            setRecords(updatedRecords);
             handleCloseModal();
         } catch (error) {
             console.error('Erro ao salvar manutenção:', error);
@@ -658,11 +667,47 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <KpiCard title="Total de Ordens" value={String(kpiData.totalOrders)} unit="" icon={<Wrench />} color={COLORS.secondary} />
                 <KpiCard title="Em Aberto" value={String(kpiData.openOrders)} unit="" icon={<TriangleAlert />} color={COLORS.error} />
                 <KpiCard title="Fechadas" value={String(kpiData.closedOrders)} unit="" icon={<Activity />} color={COLORS.success} />
                 <KpiCard title="Tempo Parado" value={formatKpiTime(kpiData.totalDowntimeHours)} unit="h" icon={<Activity />} color={COLORS.tertiary} />
+
+                {/* MTTR (Mean Time To Repair) com indicador de status */}
+                <KpiCard
+                    title="MTTR (Tempo Médio)"
+                    value={formatKpiTime(kpiData.mttr)}
+                    unit="h"
+                    icon={<TrendingUp />}
+                    color={COLORS.primary}
+                    tooltip={{
+                        statusColor: getMTTRStatus(kpiData.mttr).color,
+                        content: (
+                            <div className="space-y-2">
+                                <div className="font-bold text-sm mb-2">
+                                    {getMTTRStatus(kpiData.mttr).label}
+                                </div>
+                                <p className="text-xs leading-relaxed">
+                                    {getMTTRStatus(kpiData.mttr).description}
+                                </p>
+                                <div className="pt-2 mt-2 border-t border-slate-600 space-y-1">
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                        <span>{'<'} 2h = Excelente</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                                        <span>2-4h = Atenção</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                        <span>{'>'} 4h = Crítico</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    }}
+                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -680,6 +725,8 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                                     outerRadius={100}
                                     paddingAngle={5}
                                     stroke={isDarkMode ? '#1e293b' : '#fff'}
+                                    label={({ name, value }) => `${name}: ${formatChartNumber(Number(value))}`}
+                                    labelLine={{ stroke: isDarkMode ? '#94a3b8' : '#64748b', strokeWidth: 1 }}
                                 >
                                     {stopsBySectorData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={COLORS.pie[index % COLORS.pie.length]} strokeWidth={0} />
@@ -688,9 +735,29 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                                 <Tooltip
                                     contentStyle={tooltipStyle}
                                     itemStyle={tooltipItemStyle}
-                                    formatter={formatPieTooltip}
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            const data = payload[0].payload;
+                                            return (
+                                                <div style={{
+                                                    ...tooltipStyle,
+                                                    padding: '12px',
+                                                    border: `1px solid ${tooltipStyle.borderColor}`
+                                                }}>
+                                                    <p style={{ fontWeight: 600, marginBottom: '8px' }}>{data.name}</p>
+                                                    <p style={{ fontSize: '14px', marginBottom: '4px' }}>
+                                                        Paradas: <strong>{data.Paradas}</strong>
+                                                    </p>
+                                                    <p style={{ fontSize: '14px', color: COLORS.tertiary }}>
+                                                        Horas Paradas: <strong>{formatDuration(data['Horas Paradas'])}</strong>
+                                                    </p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
                                 />
-                                <Legend wrapperStyle={legendStyle} iconType="circle" />
+                                <Legend wrapperStyle={{ fontSize: '14px' }} iconType="circle" />
                             </PieChart>
                         </ResponsiveContainer>
                     ) : (
@@ -705,6 +772,13 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                     {monthlyDowntimeData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                             <ComposedChart data={monthlyDowntimeData} margin={chartMargin}>
+                                <defs>
+                                    <linearGradient id="maintenanceGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor={COLORS.tertiary} stopOpacity={0.6} />
+                                        <stop offset="50%" stopColor={COLORS.tertiary} stopOpacity={0.3} />
+                                        <stop offset="100%" stopColor={COLORS.tertiary} stopOpacity={0.05} />
+                                    </linearGradient>
+                                </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                 <XAxis
                                     dataKey="name"
@@ -716,7 +790,25 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                                     itemStyle={tooltipItemStyle}
                                     formatter={formatTimeTooltip}
                                 />
-                                <Line type="monotone" dataKey="Horas Paradas" stroke={COLORS.tertiary} strokeWidth={3} dot={lineDotProps} activeDot={lineActiveDotProps} />
+                                <Area
+                                    type="natural"
+                                    dataKey="Horas Paradas"
+                                    stroke="none"
+                                    fill="url(#maintenanceGradient)"
+                                    fillOpacity={1}
+                                    legendType="none"
+                                    tooltipType="none"
+                                />
+                                <Line
+                                    type="natural"
+                                    dataKey="Horas Paradas"
+                                    stroke={COLORS.tertiary}
+                                    strokeWidth={3}
+                                    dot={false}
+                                    activeDot={{ r: 6, fill: '#fff', stroke: COLORS.tertiary, strokeWidth: 2 }}
+                                >
+                                    <LabelList dataKey="Horas Paradas" position="top" formatter={(v) => `${formatKpiTime(Number(v))}h`} style={{ fill: '#B36B3C', fontSize: 16, fontWeight: 600 }} />
+                                </Line>
                             </ComposedChart>
                         </ResponsiveContainer>
                     ) : (
@@ -728,17 +820,19 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                 </ChartContainer>
 
                 <div className="lg:col-span-2">
-                    <ChartContainer title="Top 5 Máquinas com Mais Paradas">
+                    <ChartContainer title="Máquinas com Mais Paradas">
                         {filteredOverviewRecords.length > 0 && topMachinesData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={topMachinesData} layout="vertical" margin={chartVerticalMargin} barSize={24}>
+                                <BarChart data={topMachinesData} layout="vertical" margin={chartVerticalMargin} barSize={45}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
                                     <XAxis {...verticalXAxisProps} />
                                     <YAxis {...verticalYAxisProps} />
                                     <Tooltip
                                         content={<CustomMachineTooltip />}
                                     />
-                                    <Bar dataKey="Paradas" fill={COLORS.primary} radius={barRadiusVertical} />
+                                    <Bar dataKey="Paradas" fill={COLORS.primary} radius={barRadiusVertical}>
+                                        <LabelList dataKey="Paradas" position="right" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#D99B61', fontSize: 16, fontWeight: 600 }} />
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -847,7 +941,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                                     <td className="px-6 py-4">{rec.technician || '-'}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${rec.status === MaintenanceStatus.EM_ABERTO ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
-                                            {rec.status}
+                                            {rec.status.toUpperCase()}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">{formatDuration(rec.durationHours)}</td>

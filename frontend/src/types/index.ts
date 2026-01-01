@@ -172,7 +172,9 @@ export interface ProductionSpeedRecord {
   dailyProduction: DailyProduction[];  // Array de até 31 dias
   totalProgramado: number;             // Soma de todos os dias programados
   totalRealizado: number;              // Soma de todos os dias realizados
+  totalRealizadoKgUnd: number;         // Quantidade em KG ou UND (realizado × rendimento)
   velocidade: number;                  // Percentual de atingimento (0-100+)
+  unit?: Unit;                         // Unidade do produto (KG ou UND)
 }
 
 /**

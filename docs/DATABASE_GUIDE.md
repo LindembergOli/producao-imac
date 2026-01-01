@@ -2,11 +2,11 @@
 
 ## 1. Visão Geral do Banco
 
-O banco de dados `imac_congelados` é relacional e utiliza o PostgreSQL. Ele foi projetado para suportar a **Arquitetura Minimalista Profissional (AMP)** do sistema, garantindo integridade, performance e escalabilidade.
+O banco de dados `imac_congelados` é relacional e utiliza o PostgreSQL. Ele foi projetado para suportar a arquitetura do sistema, garantindo integridade, performance e escalabilidade.
 
 ### Principais Entidades:
 - **Autenticação**: Usuários e Tokens de Refresh.
-- **Cadastros Base**: Funcionários, Produtos, Máquinas.
+- **Cadastros Base**: Funcionários, Produtos, Insumos eMáquinas.
 - **Produção**: Velocidade de Produção (Metas vs Realizado).
 - **Ocorrências**: Perdas, Erros de Produção, Manutenção, Absenteísmo.
 
@@ -20,6 +20,7 @@ O banco de dados `imac_congelados` é relacional e utiliza o PostgreSQL. Ele foi
 | `refresh_tokens` | Tokens para manter a sessão do usuário ativa com segurança. | `token`, `userId`, `expiresAt` |
 | `employees` | Cadastro de funcionários da fábrica. | `name`, `sector`, `role` |
 | `products` | Catálogo de produtos fabricados. | `name`, `sector`, `unit`, `unit_cost` |
+| `supplies` | Catálogo de insumos utilizados na produção. | `name`, `sector`, `unit`, `unit_cost` |
 | `machines` | Equipamentos utilizados na produção. | `name`, `code`, `sector` |
 | `production_speed` | Registro de metas e produção diária. | `mesAno`, `sector`, `dailyProduction` (JSON) |
 | `losses` | Registro de perdas de material ou produto. | `date`, `lossType`, `quantity`, `totalCost` |
@@ -179,7 +180,21 @@ CREATE TABLE IF NOT EXISTS "products" (
     CONSTRAINT "products_pkey" PRIMARY KEY ("id")
 );
 
--- 6. Tabela de Máquinas (machines)
+-- 6. Tabela de Insumos (supplies)
+CREATE TABLE IF NOT EXISTS "supplies" (
+    "id" SERIAL NOT NULL,
+    "sector" "Sector" NOT NULL,
+    "name" TEXT NOT NULL,
+    "unit" "Unit" NOT NULL,
+    "unit_cost" DOUBLE PRECISION NOT NULL,
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "supplies_pkey" PRIMARY KEY ("id")
+);
+
+-- 7. Tabela de Máquinas (machines)
 CREATE TABLE IF NOT EXISTS "machines" (
     "id" SERIAL NOT NULL,
     "sector" "Sector" NOT NULL,
@@ -193,7 +208,7 @@ CREATE TABLE IF NOT EXISTS "machines" (
 
 CREATE UNIQUE INDEX IF NOT EXISTS "machines_code_key" ON "machines"("code");
 
--- 7. Tabela de Velocidade de Produção (production_speed)
+-- 8. Tabela de Velocidade de Produção (production_speed)
 CREATE TABLE IF NOT EXISTS "production_speed" (
     "id" SERIAL NOT NULL,
     "mesAno" TEXT NOT NULL,
@@ -210,7 +225,7 @@ CREATE TABLE IF NOT EXISTS "production_speed" (
     CONSTRAINT "production_speed_pkey" PRIMARY KEY ("id")
 );
 
--- 8. Tabela de Perdas (losses)
+-- 9. Tabela de Perdas (losses)
 CREATE TABLE IF NOT EXISTS "losses" (
     "id" SERIAL NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
@@ -227,7 +242,7 @@ CREATE TABLE IF NOT EXISTS "losses" (
     CONSTRAINT "losses_pkey" PRIMARY KEY ("id")
 );
 
--- 9. Tabela de Erros (errors)
+-- 10. Tabela de Erros (errors)
 CREATE TABLE IF NOT EXISTS "errors" (
     "id" SERIAL NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
@@ -243,7 +258,7 @@ CREATE TABLE IF NOT EXISTS "errors" (
     CONSTRAINT "errors_pkey" PRIMARY KEY ("id")
 );
 
--- 10. Tabela de Manutenção (maintenance)
+-- 11. Tabela de Manutenção (maintenance)
 CREATE TABLE IF NOT EXISTS "maintenance" (
     "id" SERIAL NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
@@ -263,7 +278,7 @@ CREATE TABLE IF NOT EXISTS "maintenance" (
     CONSTRAINT "maintenance_pkey" PRIMARY KEY ("id")
 );
 
--- 11. Tabela de Absenteísmo (absenteeism)
+-- 12. Tabela de Absenteísmo (absenteeism)
 CREATE TABLE IF NOT EXISTS "absenteeism" (
     "id" SERIAL NOT NULL,
     "employeeName" TEXT NOT NULL,
@@ -293,6 +308,14 @@ VALUES
 ('PAES', 'Pão Francês', 'KG', 50, 0.35, NOW()),
 ('PAO_DE_QUEIJO', 'Pão de Queijo Tradicional', 'KG', 40, 0.80, NOW()),
 ('CONFEITARIA', 'Bolo de Chocolate', 'UND', 12, 15.00, NOW())
+ON CONFLICT DO NOTHING;
+
+-- Inserir alguns insumos de exemplo
+INSERT INTO "supplies" ("sector", "name", "unit", "unit_cost", "updatedAt")
+VALUES 
+('PAES', 'Farinha de Trigo', 'KG', 2.50, NOW()),
+('CONFEITARIA', 'Açúcar Refinado', 'KG', 3.20, NOW()),
+('PAO_DE_QUEIJO', 'Polvilho Azedo', 'KG', 4.80, NOW())
 ON CONFLICT DO NOTHING;
 
 -- Inserir algumas máquinas de exemplo

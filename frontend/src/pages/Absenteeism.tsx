@@ -1,18 +1,20 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { AbsenteeismRecord, Employee } from '../types';
 import { Sector, AbsenceType } from '../types';
+import { formatChartNumber } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { ComposedChart, Bar, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Bar, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 import { TrendingUp, List, Plus, File, Users, Activity, TriangleAlert, Pencil, Trash2, Filter } from 'lucide-react';
 import Modal, { ConfirmModal } from '../components/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { absenteeismService } from '../services/modules/absenteeism';
 import { formatBrazilianNumber } from '../utils/formatters';
 import DatePickerInput from '../components/DatePickerInput';
+import AutocompleteInput from '../components/AutocompleteInput';
 
 const COLORS = {
   total: '#EF4444',    // Red 500
@@ -25,6 +27,29 @@ const COLORS = {
   success: '#2ECC71',
   error: '#E74C3C',
   pie: ['#2ECC71', '#E74C3C', '#F3C78A', '#60A5FA', '#A78BFA']
+};
+
+// Função para determinar status da taxa de absenteísmo
+const getAbsenteeismRateStatus = (rate: number): { color: string; label: string; description: string } => {
+  if (rate < 3) {
+    return {
+      color: '#2ECC71',
+      label: '🟢 EXCELENTE',
+      description: 'Taxa abaixo de 3% indica gestão exemplar e alta satisfação dos colaboradores.'
+    };
+  } else if (rate <= 6) {
+    return {
+      color: '#F59E0B',
+      label: '🟡 ATENÇÃO',
+      description: 'Taxa entre 3-6% está dentro da média nacional, mas há espaço para melhorias.'
+    };
+  } else {
+    return {
+      color: '#E74C3C',
+      label: '🔴 CRÍTICO',
+      description: 'Taxa acima de 6% requer ação imediata. Investigue causas e implemente melhorias.'
+    };
+  }
 };
 
 // getMesAnoOptions removido pois agora usamos DatePickerInput com type="month"
@@ -135,10 +160,14 @@ const AbsenteeismRecordForm: React.FC<{
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium mb-1">Nome do Funcionário *</label>
-          <select value={formData.employeeName} onChange={e => setFormData({ ...formData, employeeName: e.target.value })} disabled={!formData.sector} className={`${inputClass} disabled:bg-gray-100 dark:disabled:bg-slate-800`}>
-            <option value="">{formData.sector ? 'Selecione um funcionário' : 'Selecione um setor primeiro'}</option>
-            {availableEmployees.map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
-          </select>
+          <AutocompleteInput
+            value={formData.employeeName}
+            onChange={(value) => setFormData({ ...formData, employeeName: value })}
+            options={availableEmployees.map(e => ({ id: e.id, name: e.name }))}
+            placeholder={formData.sector ? 'Digite o nome do funcionário...' : 'Selecione um setor primeiro'}
+            disabled={!formData.sector}
+            emptyMessage="Nenhum funcionário encontrado para este setor"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Dias Ausentes *</label>
@@ -293,7 +322,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
       if (tableFilters.sector !== 'Todos' && normalize(String(rec.sector)) !== normalize(tableFilters.sector)) return false;
       if (tableFilters.employee && !rec.employeeName.toLowerCase().includes(tableFilters.employee.toLowerCase())) return false;
       return true;
-    }).sort((a, b) => (a.sector || '').localeCompare(b.sector || ''));
+    }); // Ordenação removida - agora vem do backend (data DESC, setor ASC, funcionário ASC)
   }, [records, tableFilters]);
 
 
@@ -317,33 +346,67 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
     let start: Date;
     let end: Date;
 
-    if (overviewFilters.start) {
-      const [y, m, d] = overviewFilters.start.split('-').map(Number);
-      if (y && m !== undefined && d) {
-        start = new Date(y, m - 1, d);
+    if (overviewFilters.start || overviewFilters.end) {
+      // Se há filtro, usar as datas do filtro
+      if (overviewFilters.start) {
+        const [y, m, d] = overviewFilters.start.split('-').map(Number);
+        if (y && m !== undefined && d) {
+          start = new Date(y, m - 1, d);
+        } else {
+          start = new Date();
+          start.setDate(1);
+        }
       } else {
         start = new Date();
         start.setDate(1);
       }
-    } else {
-      // Se não tem filtro, pega o início do mês atual ou a menor data
-      start = new Date();
-      start.setDate(1);
-    }
 
-    if (overviewFilters.end) {
-      const [y, m, d] = overviewFilters.end.split('-').map(Number);
-      if (y && m !== undefined && d) {
-        end = new Date(y, m - 1, d);
+      if (overviewFilters.end) {
+        const [y, m, d] = overviewFilters.end.split('-').map(Number);
+        if (y && m !== undefined && d) {
+          end = new Date(y, m - 1, d);
+        } else {
+          end = new Date();
+        }
       } else {
         end = new Date();
       }
     } else {
-      end = new Date();
+      // Se não há filtro, usar o intervalo de datas dos registros filtrados
+      if (safeRecords.length > 0) {
+        const dates = safeRecords.map(r => new Date(r.date));
+        start = new Date(Math.min(...dates.map(d => d.getTime())));
+        end = new Date(Math.max(...dates.map(d => d.getTime())));
+      } else {
+        // Se não há registros, usar mês atual
+        start = new Date();
+        start.setDate(1);
+        end = new Date();
+      }
     }
 
     const businessDays = countBusinessDays(start, end);
-    const totalDaysLost = safeRecords.reduce((sum, r) => sum + (Number(r.daysAbsent) || 0), 0);
+
+    // Calcular dias perdidos considerando apenas dias dentro do período filtrado
+    const totalDaysLost = safeRecords.reduce((sum, r) => {
+      // Data de início da ausência
+      const absenceStart = new Date(r.date);
+
+      // Data de fim da ausência (início + dias ausentes - 1)
+      const absenceEnd = new Date(absenceStart);
+      absenceEnd.setDate(absenceEnd.getDate() + (Number(r.daysAbsent) || 1) - 1);
+
+      // Calcular interseção entre período da ausência e período filtrado
+      const effectiveStart = absenceStart > start ? absenceStart : start;
+      const effectiveEnd = absenceEnd < end ? absenceEnd : end;
+
+      // Contar apenas dias úteis que caem dentro do período filtrado
+      if (effectiveStart <= effectiveEnd) {
+        return sum + countBusinessDays(effectiveStart, effectiveEnd);
+      }
+      return sum;
+    }, 0);
+
     const totalEmployees = employees?.length || 0;
     const totalPossibleDays = totalEmployees * (businessDays || 1);
 
@@ -468,7 +531,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
       alert("Não há dados para exportar.");
       return;
     }
-    const XLSX = (window as any).XLSX; // This is line 423-ish originally in provided snippet, but based on grep it was 425. Checking context.
+
     const dataToExport = filteredTableRecords.map(r => ({
       'Dia da Falta': formatDateSafe(r.date),
       'Setor': r.sector,
@@ -549,7 +612,40 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
         <KpiCard title="Atestados" value={String(kpiData.atestados || 0)} unit="func." icon={<File />} color={COLORS.atestado} />
         <KpiCard title="Faltas Injust." value={String(kpiData.faltasInjust || 0)} unit="func." icon={<TriangleAlert />} color={COLORS.falta} />
         <KpiCard title="Banco de Horas" value={String(kpiData.bancoHoras || 0)} unit="func." icon={<Activity />} color={COLORS.banco} />
-        <KpiCard title="Taxa de Absenteísmo" value={formatBrazilianNumber(kpiData.taxaAbsenteismo || 0, 2)} unit="%" icon={<TrendingUp />} color={COLORS.taxa} />
+        <KpiCard
+          title="Taxa de Absenteísmo"
+          value={formatBrazilianNumber(kpiData.taxaAbsenteismo || 0, 2)}
+          unit="%"
+          icon={<TrendingUp />}
+          color={COLORS.taxa}
+          tooltip={{
+            statusColor: getAbsenteeismRateStatus(kpiData.taxaAbsenteismo || 0).color,
+            content: (
+              <div className="space-y-2">
+                <div className="font-bold text-sm mb-2">
+                  {getAbsenteeismRateStatus(kpiData.taxaAbsenteismo || 0).label}
+                </div>
+                <p className="text-xs leading-relaxed">
+                  {getAbsenteeismRateStatus(kpiData.taxaAbsenteismo || 0).description}
+                </p>
+                <div className="pt-2 mt-2 border-t border-slate-600 space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span>{'<'} 3% = Excelente</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                    <span>3-6% = Atenção</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span>{'>'} 6% = Crítico</span>
+                  </div>
+                </div>
+              </div>
+            )
+          }}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -573,7 +669,9 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
                   wrapperStyle={legendStyle}
                   iconType="circle"
                 />
-                <Bar yAxisId="left" dataKey="Funcionários" fill={COLORS.success} barSize={24} name="Funcionários" radius={barRadius} />
+                <Bar yAxisId="left" dataKey="Funcionários" fill={COLORS.success} barSize={45} name="Funcionários" radius={barRadius}>
+                  <LabelList dataKey="Funcionários" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#10B981', fontSize: 16, fontWeight: 600 }} />
+                </Bar>
                 <Line yAxisId="right" type="monotone" dataKey="Taxa %" stroke={COLORS.primary} strokeWidth={3} name="Taxa %" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -599,6 +697,9 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
                   outerRadius={90}
                   paddingAngle={5}
                   stroke={isDarkMode ? '#1e293b' : '#fff'}
+                  label={({ name, value }) => `${name}: ${formatChartNumber(Number(value))}`}
+                  labelLine={{ stroke: isDarkMode ? '#94a3b8' : '#64748b', strokeWidth: 1 }}
+                  style={{ fontSize: '17px' }}
                 >
                   {chartDataByType.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS.pie[index % COLORS.pie.length]} strokeWidth={0} />
@@ -708,9 +809,9 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${rec.absenceType === AbsenceType.ATESTADO ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                       rec.absenceType === AbsenceType.FALTA_INJUSTIFICADA ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                       }`}>
-                      {rec.absenceType}
+                      {rec.absenceType.toUpperCase()}
                     </span>
                   </td>
                   {!isEspectador() && (

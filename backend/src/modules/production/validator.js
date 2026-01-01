@@ -12,15 +12,19 @@ const sectorMap = {
     'PAES': 'PAES',
     'SALGADO': 'SALGADO',
     'PAO_DE_QUEIJO': 'PAO_DE_QUEIJO',
-    'PAO DE QUEIJO': 'PAO_DE_QUEIJO',  // Aceitar com espaço também
-    'PÃO DE QUEIJO': 'PAO_DE_QUEIJO',  // Aceitar com acento e espaço
+    'PAO DE QUEIJO': 'PAO_DE_QUEIJO',
+    'PÃO DE QUEIJO': 'PAO_DE_QUEIJO',
     'EMBALADORA': 'EMBALADORA',
-    'MANUTENCAO': 'MANUTENCAO'
+    'MANUTENCAO': 'MANUTENCAO',
+    // Frontend enum values (uppercase with accents)
+    'PÃES': 'PAES',
+    'MANUTENÇÃO': 'MANUTENCAO'
 };
 
 const FrontSectorEnum = z.enum([
     'Confeitaria', 'Pães', 'Salgado', 'Pão de Queijo', 'Embaladora', 'Manutenção',
-    'CONFEITARIA', 'PAES', 'SALGADO', 'PAO_DE_QUEIJO', 'PAO DE QUEIJO', 'PÃO DE QUEIJO', 'EMBALADORA', 'MANUTENCAO'
+    'CONFEITARIA', 'PAES', 'SALGADO', 'PAO_DE_QUEIJO', 'PAO DE QUEIJO', 'PÃO DE QUEIJO', 'EMBALADORA', 'MANUTENCAO',
+    'PÃES', 'MANUTENÇÃO'
 ]);
 
 const baseSchema = z.object({

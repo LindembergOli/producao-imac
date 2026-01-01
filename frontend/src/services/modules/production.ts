@@ -34,12 +34,12 @@ export const productionService = {
         return transformRecord(response.data.data);
     },
 
-    create: async (data: Omit<ProductionSpeedRecord, 'id'>): Promise<ProductionSpeedRecord> => {
+    create: async (data: Omit<ProductionSpeedRecord, 'id' | 'totalRealizadoKgUnd' | 'unit'>): Promise<ProductionSpeedRecord> => {
         const response = await api.post('/production', data);
         return transformRecord(response.data.data);
     },
 
-    update: async (id: number, data: Partial<Omit<ProductionSpeedRecord, 'id'>>): Promise<ProductionSpeedRecord> => {
+    update: async (id: number, data: Partial<Omit<ProductionSpeedRecord, 'id' | 'totalRealizadoKgUnd' | 'unit'>>): Promise<ProductionSpeedRecord> => {
         const response = await api.put(`/production/${id}`, data);
         return transformRecord(response.data.data);
     },

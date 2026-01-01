@@ -1,15 +1,17 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { ProductionSpeedRecord, Product, DailyProduction } from '../types';
 import { Sector, Unit } from '../types';
+import { formatChartNumber } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Plus, Pencil, Trash2, TrendingUp, List, File, Activity, ArrowRight, ArrowLeftRight } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { ComposedChart, Line, Bar, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { ComposedChart, Line, Bar, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
 import DatePickerInput from '../components/DatePickerInput';
+import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
 import { productionService } from '../services/modules/production';
 
@@ -32,12 +34,12 @@ const getCurrentMesAno = () => {
 
 const ProductionRecordForm: React.FC<{
     record: Partial<ProductionSpeedRecord> | null;
-    onSave: (record: Omit<ProductionSpeedRecord, 'id'>) => void;
+    onSave: (record: Omit<ProductionSpeedRecord, 'id' | 'totalRealizadoKgUnd' | 'unit'>) => void;
     onCancel: () => void;
     products: Product[];
 }> = ({ record, onSave, onCancel, products }) => {
 
-    const [formData, setFormData] = useState<Omit<ProductionSpeedRecord, 'id' | 'totalProgramado' | 'totalRealizado' | 'velocidade'>>({
+    const [formData, setFormData] = useState<Omit<ProductionSpeedRecord, 'id' | 'totalProgramado' | 'totalRealizado' | 'totalRealizadoKgUnd' | 'velocidade' | 'unit'>>({
         mesAno: record?.mesAno || getCurrentMesAno(),
         sector: record?.sector || Sector.CONFEITARIA,
         produto: record?.produto || '',
@@ -113,10 +115,14 @@ const ProductionRecordForm: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Produto *</label>
-                    <select value={formData.produto} onChange={e => setFormData({ ...formData, produto: e.target.value })} disabled={!formData.sector} className={`${inputClass} disabled:bg-gray-100 dark:disabled:bg-slate-800`}>
-                        <option value="">{formData.sector ? 'Selecione' : 'Selecione um setor primeiro'}</option>
-                        {availableProducts.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                    </select>
+                    <AutocompleteInput
+                        value={formData.produto}
+                        onChange={(value) => setFormData({ ...formData, produto: value })}
+                        options={availableProducts.map(p => ({ id: p.id, name: p.name }))}
+                        placeholder={formData.sector ? 'Digite o nome do produto...' : 'Selecione um setor primeiro'}
+                        disabled={!formData.sector}
+                        emptyMessage="Nenhum produto encontrado para este setor"
+                    />
                 </div>
             </div>
             <div>
@@ -146,7 +152,7 @@ const ProductionRecordForm: React.FC<{
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 pt-4 border-t dark:border-slate-700">
+            <div className="grid grid-cols-4 gap-4 pt-4 border-t dark:border-slate-700">
                 <div>
                     <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Total Programado</label>
                     <input type="text" readOnly value={totals.totalProgramado} className="mt-1 block w-full rounded-md bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 p-2 text-center font-bold dark:text-white" />
@@ -154,6 +160,22 @@ const ProductionRecordForm: React.FC<{
                 <div>
                     <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Total Realizado</label>
                     <input type="text" readOnly value={totals.totalRealizado} className="mt-1 block w-full rounded-md bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 p-2 text-center font-bold dark:text-white" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">QTD. EM KG/UND</label>
+                    <input
+                        type="text"
+                        readOnly
+                        value={(() => {
+                            const product = availableProducts.find(p => p.name === formData.produto);
+                            if (!product || !product.yield) return '-';
+                            const qtd = totals.totalRealizado * product.yield;
+                            const decimals = qtd % 1 === 0 ? 0 : 2;
+                            return `${qtd.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: 2 })} ${product.unit}`;
+                        })()}
+                        className="mt-1 block w-full rounded-md bg-white dark:bg-slate-700 border-gray-300 dark:border-slate-600 p-2 text-center font-bold dark:text-white"
+                        title="Calculado automaticamente: Total Realizado × Rendimento"
+                    />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Velocidade %</label>
@@ -330,7 +352,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         setCurrentRecord(null);
     };
 
-    const handleSave = async (data: Omit<ProductionSpeedRecord, 'id'>) => {
+    const handleSave = async (data: Omit<ProductionSpeedRecord, 'id' | 'totalRealizadoKgUnd' | 'unit'>) => {
         if (!Array.isArray(records)) return;
         try {
             if (currentRecord) {
@@ -532,24 +554,33 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartContainer title="Total Realizado por Setor">
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                        <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                             <XAxis
                                 dataKey="name"
+                                xAxisId="0"
                                 {...xAxisProps}
+                            />
+                            <XAxis
+                                dataKey="name"
+                                xAxisId="1"
+                                hide
                             />
                             <YAxis yAxisId="left" tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} />
-                            <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} iconType="circle" />
-                            <Bar yAxisId="left" dataKey="Programado" fill={COLORS.tertiary} barSize={24} radius={[4, 4, 0, 0]} />
-                            <Line yAxisId="left" type="monotone" dataKey="Realizado" stroke={COLORS.success} strokeWidth={2} dot={false} />
+                            <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} iconType="circle" />
+                            <Bar yAxisId="left" xAxisId="0" dataKey="Programado" fill="#64748B" barSize={45} radius={[4, 4, 0, 0]}>
+                            </Bar>
+                            <Bar yAxisId="left" xAxisId="1" dataKey="Realizado" fill={COLORS.primary} barSize={45} radius={[4, 4, 0, 0]}>
+                                <LabelList dataKey="Realizado" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#D99B61', fontSize: 16, fontWeight: 600 }} />
+                            </Bar>
                         </ComposedChart>
                     </ResponsiveContainer>
                 </ChartContainer>
 
                 <ChartContainer title="Velocidade % por Setor">
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                        <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                             <XAxis
                                 dataKey="name"
@@ -557,8 +588,10 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                             />
                             <YAxis tickFormatter={(tick) => `${Number(tick).toFixed(0)}%`} tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} domain={[0, 'auto']} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => name === 'Velocidade %' ? [`${Number(value).toFixed(2)}%`, name] : [value, name]} />
-                            <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} iconType="circle" />
-                            <Bar dataKey="Velocidade %" fill={COLORS.primary} barSize={24} radius={[4, 4, 0, 0]} />
+                            <Legend wrapperStyle={{ fontSize: '14px', paddingTop: '10px' }} iconType="circle" />
+                            <Bar dataKey="Velocidade %" fill={COLORS.primary} barSize={45} radius={[4, 4, 0, 0]}>
+                                <LabelList dataKey="Velocidade %" position="top" formatter={(v) => `${formatChartNumber(Number(v))}%`} style={{ fill: '#D99B61', fontSize: 16, fontWeight: 600 }} />
+                            </Bar>
                             <Line type="monotone" dataKey="Meta 100%" stroke={COLORS.success} strokeWidth={2} strokeDasharray="5 5" dot={false} />
                         </ComposedChart>
                     </ResponsiveContainer>
@@ -573,12 +606,14 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 <ChartContainer title={`Pães`}>
                     {paesData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={paesData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                            <BarChart data={paesData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                 <XAxis dataKey="name" {...xAxisProps} />
                                 <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <Tooltip content={<CustomPerformanceTooltip />} />
-                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={24} radius={[4, 4, 0, 0]} name="Diferença" />
+                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={45} radius={[4, 4, 0, 0]} name="Diferença">
+                                    <LabelList dataKey="diferenca" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#E74C3C', fontSize: 16, fontWeight: 600 }} />
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     ) : <div className="flex items-center justify-center h-full text-gray-400">Nenhum produto abaixo da meta</div>}
@@ -588,12 +623,14 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 <ChartContainer title={`Pão de Queijo`}>
                     {paoQueijoData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={paoQueijoData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                            <BarChart data={paoQueijoData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                 <XAxis dataKey="name" {...xAxisProps} />
                                 <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <Tooltip content={<CustomPerformanceTooltip />} />
-                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={24} radius={[4, 4, 0, 0]} name="Diferença" />
+                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={45} radius={[4, 4, 0, 0]} name="Diferença">
+                                    <LabelList dataKey="diferenca" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#E74C3C', fontSize: 16, fontWeight: 600 }} />
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     ) : <div className="flex items-center justify-center h-full text-gray-400">Nenhum produto abaixo da meta</div>}
@@ -603,12 +640,14 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 <ChartContainer title={`Salgado`}>
                     {salgadoData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={salgadoData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                            <BarChart data={salgadoData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                 <XAxis dataKey="name" {...xAxisProps} />
                                 <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <Tooltip content={<CustomPerformanceTooltip />} />
-                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={24} radius={[4, 4, 0, 0]} name="Diferença" />
+                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={45} radius={[4, 4, 0, 0]} name="Diferença">
+                                    <LabelList dataKey="diferenca" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#E74C3C', fontSize: 16, fontWeight: 600 }} />
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     ) : <div className="flex items-center justify-center h-full text-gray-400">Nenhum produto abaixo da meta</div>}
@@ -618,12 +657,14 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 <ChartContainer title={`Confeitaria`}>
                     {confeitariaData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={confeitariaData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+                            <BarChart data={confeitariaData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                                 <XAxis dataKey="name" {...xAxisProps} />
                                 <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <Tooltip content={<CustomPerformanceTooltip />} />
-                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={24} radius={[4, 4, 0, 0]} name="Diferença" />
+                                <Bar dataKey="diferenca" fill={COLORS.error} barSize={45} radius={[4, 4, 0, 0]} name="Diferença">
+                                    <LabelList dataKey="diferenca" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#E74C3C', fontSize: 16, fontWeight: 600 }} />
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     ) : <div className="flex items-center justify-center h-full text-gray-400">Nenhum produto abaixo da meta</div>}
@@ -699,6 +740,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                                     <th className="px-6 py-3 text-center">QTD POR SEMANA</th>
                                     <th className="px-6 py-3 text-center">Programado</th>
                                     <th className="px-6 py-3 text-center">Realizado</th>
+                                    <th className="px-6 py-3 text-center">QTD. EM KG/UND</th>
                                     <th className="px-6 py-3 text-center">Velocidade %</th>
                                     {!isEspectador() && <th className="px-6 py-3 text-center no-print">Ações</th>}
                                 </tr>
@@ -735,6 +777,12 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                                         </td>
                                         <td className="px-6 py-4 text-center">{rec.totalProgramado}</td>
                                         <td className="px-6 py-4 text-center">{rec.totalRealizado}</td>
+                                        <td className="px-6 py-4 text-center">
+                                            {rec.totalRealizadoKgUnd ? (() => {
+                                                const decimals = rec.totalRealizadoKgUnd % 1 === 0 ? 0 : 2;
+                                                return `${rec.totalRealizadoKgUnd.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: 2 })} ${rec.unit || 'UND'}`;
+                                            })() : '-'}
+                                        </td>
                                         <td className="px-6 py-4 font-semibold text-center">{rec.velocidade.toFixed(1)}%</td>
                                         {!isEspectador() && (
                                             <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">

@@ -1,13 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ComposedChart } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ComposedChart, LabelList, Area } from 'recharts';
 import type { ProductionSpeedRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord, Employee } from '../types';
 import { Sector, Unit } from '../types';
 import { Activity, TrendingDown, TriangleAlert, Wrench, UserMinus, DollarSign } from 'lucide-react';
 import { maintenanceService } from '../services/modules/maintenance';
-import { formatBrazilianNumber } from '../utils/formatters';
+import { formatBrazilianNumber, formatChartNumber } from '../utils/formatters';
 import DatePickerInput from '../components/DatePickerInput';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
 
 const COLORS = {
   primary: '#D99B61',
@@ -146,29 +148,53 @@ const Dashboard: React.FC<DashboardProps> = ({
     // Manutenção
     const ordensManutencao = filteredMaintenance.length;
 
-    // Absenteísmo - Cálculo dinâmico para taxa
-    const totalDaysAbsent = filteredAbsenteeism.reduce((sum, r) => sum + r.daysAbsent, 0);
-
-    // Determinar intervalo de datas efetivo para lógica de contagem de dias úteis
+    // Absenteísmo - Calcular dias perdidos considerando apenas dias dentro do período filtrado
+    // Determinar intervalo de datas efetivo
     let effectiveStartDate: Date;
     let effectiveEndDate: Date;
 
     if (dateRange.start) {
       effectiveStartDate = new Date(dateRange.start);
     } else {
-      // Comportamento padrão: Início do mês atual (Igual ao módulo Absenteísmo)
-      effectiveStartDate = new Date();
-      effectiveStartDate.setDate(1);
+      // Sem filtro: usar intervalo de datas dos registros
+      if (filteredAbsenteeism.length > 0) {
+        const dates = filteredAbsenteeism.map(r => new Date(r.date));
+        effectiveStartDate = new Date(Math.min(...dates.map(d => d.getTime())));
+      } else {
+        effectiveStartDate = new Date();
+        effectiveStartDate.setDate(1);
+      }
     }
 
     if (dateRange.end) {
       effectiveEndDate = new Date(dateRange.end);
     } else {
-      // Comportamento padrão: Hoje
-      effectiveEndDate = new Date();
+      // Sem filtro: usar intervalo de datas dos registros
+      if (filteredAbsenteeism.length > 0) {
+        const dates = filteredAbsenteeism.map(r => new Date(r.date));
+        effectiveEndDate = new Date(Math.max(...dates.map(d => d.getTime())));
+      } else {
+        effectiveEndDate = new Date();
+      }
     }
 
     const businessDays = countBusinessDays(effectiveStartDate, effectiveEndDate);
+
+    // Calcular dias perdidos considerando interseção com período
+    const totalDaysAbsent = filteredAbsenteeism.reduce((sum, r) => {
+      const absenceStart = new Date(r.date);
+      const absenceEnd = new Date(absenceStart);
+      absenceEnd.setDate(absenceEnd.getDate() + (Number(r.daysAbsent) || 1) - 1);
+
+      const effectiveStart = absenceStart > effectiveStartDate ? absenceStart : effectiveStartDate;
+      const effectiveEnd = absenceEnd < effectiveEndDate ? absenceEnd : effectiveEndDate;
+
+      if (effectiveStart <= effectiveEnd) {
+        return sum + countBusinessDays(effectiveStart, effectiveEnd);
+      }
+      return sum;
+    }, 0);
+
     const totalPossibleDays = employees.length * businessDays;
     const taxaAbsenteismo = totalPossibleDays > 0 ? (totalDaysAbsent / totalPossibleDays) * 100 : 0;
 
@@ -306,10 +332,49 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     const businessDays = kpiData.businessDays || 1;
 
+    // Determinar período efetivo (mesmo do KPI)
+    let effectiveStartDate: Date;
+    let effectiveEndDate: Date;
+
+    if (dateRange.start) {
+      effectiveStartDate = new Date(dateRange.start);
+    } else {
+      if (filteredAbsenteeism.length > 0) {
+        const dates = filteredAbsenteeism.map(r => new Date(r.date));
+        effectiveStartDate = new Date(Math.min(...dates.map(d => d.getTime())));
+      } else {
+        effectiveStartDate = new Date();
+        effectiveStartDate.setDate(1);
+      }
+    }
+
+    if (dateRange.end) {
+      effectiveEndDate = new Date(dateRange.end);
+    } else {
+      if (filteredAbsenteeism.length > 0) {
+        const dates = filteredAbsenteeism.map(r => new Date(r.date));
+        effectiveEndDate = new Date(Math.max(...dates.map(d => d.getTime())));
+      } else {
+        effectiveEndDate = new Date();
+      }
+    }
+
     const absenteeismBySector = filteredAbsenteeism.reduce((acc, rec) => {
       const normalizedSector = normalizeSector(rec.sector);
       if (!acc[normalizedSector]) acc[normalizedSector] = 0;
-      acc[normalizedSector] += rec.daysAbsent;
+
+      // Calcular interseção
+      const absenceStart = new Date(rec.date);
+      const absenceEnd = new Date(absenceStart);
+      absenceEnd.setDate(absenceEnd.getDate() + (Number(rec.daysAbsent) || 1) - 1);
+
+      const effectiveStart = absenceStart > effectiveStartDate ? absenceStart : effectiveStartDate;
+      const effectiveEnd = absenceEnd < effectiveEndDate ? absenceEnd : effectiveEndDate;
+
+      if (effectiveStart <= effectiveEnd) {
+        acc[normalizedSector] += countBusinessDays(effectiveStart, effectiveEnd);
+      }
+
       return acc;
     }, {} as Record<string, number>);
 
@@ -394,7 +459,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartContainer title="Custo Total (R$)">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={costEvolutionData} margin={{ top: 10, right: 30, left: 10, bottom: 20 }}>
+            <LineChart data={costEvolutionData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis dataKey="name" {...xAxisProps} />
               <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(val) => `R$${val}`} />
@@ -403,13 +468,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                 formatter={(value) => [`R$ ${Number(value).toFixed(2)}`, 'Custo Total']}
               />
               <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
-              <Line type="monotone" dataKey="Custo Total (R$)" stroke="#EF4444" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="natural" dataKey="Custo Total (R$)" stroke="#EF4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }}>
+                <LabelList dataKey="Custo Total (R$)" position="top" formatter={(v) => `R$${formatChartNumber(Number(v))}`} style={{ fill: '#EF4444', fontSize: 16, fontWeight: 600 }} />
+              </Line>
             </LineChart>
           </ResponsiveContainer>
         </ChartContainer>
         <ChartContainer title="Velocidade de Produção por Setor">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+            <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis
                 dataKey="name"
@@ -421,7 +488,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 formatter={(value, name) => name === 'Velocidade %' ? [`${Number(value).toFixed(2)}%`, name] : [value, name]}
               />
               <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
-              <Bar dataKey="Velocidade %" fill={COLORS.primary} barSize={24} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Velocidade %" fill={COLORS.primary} barSize={45} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="Velocidade %" position="top" formatter={(v) => `${formatChartNumber(Number(v))}%`} style={{ fill: '#D99B61', fontSize: 16, fontWeight: 600 }} />
+              </Bar>
               <Line type="monotone" dataKey="Meta" stroke={COLORS.tertiary} strokeWidth={2} dot={false} strokeDasharray="4 4" />
             </ComposedChart>
           </ResponsiveContainer>
@@ -429,7 +498,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
         <ChartContainer title="Perdas de Produção por Setor">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+            <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis
                 dataKey="name"
@@ -453,7 +522,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 }}
               />
               <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
-              <Bar yAxisId="left" dataKey="Perdas (KG)" fill={COLORS.error} barSize={24} radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="left" dataKey="Perdas (KG)" fill={COLORS.error} barSize={45} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="Perdas (KG)" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#EF4444', fontSize: 16, fontWeight: 600 }} />
+              </Bar>
               <Line yAxisId="right" type="monotone" dataKey="Custo (R$) Perdas" name="Custo (R$)" stroke={COLORS.tertiary} dot={false} strokeWidth={2} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -461,7 +532,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
         <ChartContainer title="Erros de Produção por Setor">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+            <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis
                 dataKey="name"
@@ -486,7 +557,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 }}
               />
               <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
-              <Bar yAxisId="left" dataKey="Quantidade" fill={COLORS.secondary} barSize={24} radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="left" dataKey="Quantidade" fill={COLORS.secondary} barSize={45} radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="Quantidade" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#F3C78A', fontSize: 16, fontWeight: 600 }} />
+              </Bar>
               <Line yAxisId="right" type="monotone" dataKey="Custo (R$) Erros" name="Custo (R$)" stroke={COLORS.tertiary} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -495,7 +568,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         <ChartContainer title="Manutenção por Setor">
           {filteredMaintenance.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%" key={`maintenance-${maintenanceRecords.length}-${JSON.stringify(maintenanceData)}`}>
-              <BarChart data={maintenanceData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
+              <BarChart data={maintenanceData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                 <XAxis
                   dataKey="name"
@@ -510,7 +583,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                 />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
-                <Bar dataKey="Ordens de Manutenção" fill={COLORS.tertiary} barSize={30} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Ordens de Manutenção" fill={COLORS.tertiary} barSize={45} radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="Ordens de Manutenção" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#B36B3C', fontSize: 16, fontWeight: 600 }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -522,8 +597,15 @@ const Dashboard: React.FC<DashboardProps> = ({
 
         <ChartContainer title="Taxa de Absenteísmo por Setor">
           <ResponsiveContainer width="100%" height="100%" key={`absenteeism-${absenteeismRecords.length}-${JSON.stringify(absenteeismChartData)}`}>
-            <ComposedChart data={absenteeismChartData} margin={{ top: 10, right: 10, left: -10, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+            <ComposedChart data={absenteeismChartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
+              <defs>
+                <linearGradient id="absenteeismGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.primary} stopOpacity={0.6} />
+                  <stop offset="50%" stopColor={COLORS.primary} stopOpacity={0.3} />
+                  <stop offset="100%" stopColor={COLORS.primary} stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={gridColor} />
               <XAxis
                 dataKey="name"
                 {...xAxisProps}
@@ -540,8 +622,26 @@ const Dashboard: React.FC<DashboardProps> = ({
                 contentStyle={tooltipStyle}
                 formatter={(value) => [`${Number(value).toFixed(2)}%`, 'Taxa de Absenteísmo']}
               />
+              <Area
+                type="natural"
+                dataKey="Taxa de Absenteísmo %"
+                stroke="none"
+                fill="url(#absenteeismGradient)"
+                fillOpacity={1}
+                legendType="none"
+                tooltipType="none"
+              />
+              <Line
+                type="natural"
+                dataKey="Taxa de Absenteísmo %"
+                stroke={COLORS.primary}
+                strokeWidth={3}
+                dot={false}
+                activeDot={{ r: 6, fill: '#fff', stroke: COLORS.primary, strokeWidth: 2 }}
+              >
+                <LabelList dataKey="Taxa de Absenteísmo %" position="top" formatter={(v) => `${formatChartNumber(Number(v))}%`} style={{ fill: COLORS.primary, fontSize: 16, fontWeight: 600 }} />
+              </Line>
               <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
-              <Line type="monotone" dataKey="Taxa de Absenteísmo %" stroke={COLORS.success} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </ChartContainer>

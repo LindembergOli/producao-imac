@@ -339,8 +339,5 @@ logger.error('Erro ao processar', { error: err.message });
 3. Incluir logs relevantes
 4. Incluir versão do Node.js
 
----
 
-## 📞 Contato
 
-Dúvidas? Entre em contato com a equipe de desenvolvimento.

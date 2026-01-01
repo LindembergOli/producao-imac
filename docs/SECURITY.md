@@ -247,13 +247,4 @@ if (isProduction) {
 - **LGPD:** Conformidade com lei brasileira de dados
 - **ISO 27001:** Princípios de segurança da informação
 
----
-
-## 📞 Contato
-
-
-**Emergências de Segurança:**  
-Para incidentes críticos em produção, contate imediatamente.
-
----
 

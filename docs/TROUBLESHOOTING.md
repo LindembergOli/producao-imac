@@ -339,7 +339,6 @@ Se o problema persistir:
 1. Verificar logs: `logs/combined.log`
 2. Verificar banco: `npx prisma studio`
 3. Verificar migrations: `npx prisma migrate status`
-4. Contatar equipe de desenvolvimento
 
 ---
 

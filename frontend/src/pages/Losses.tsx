@@ -1,15 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { LossRecord, Product, Supply } from '../types';
 import { Sector, LossType, Unit } from '../types';
+import { formatChartNumber } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart as RechartsLineChart, Line, ComposedChart } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart as RechartsLineChart, Line, ComposedChart, LabelList } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
 import DatePickerInput from '../components/DatePickerInput';
+import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
 import { lossesService } from '../services/modules/losses';
 import { formatBrazilianNumber } from '../utils/formatters';
@@ -59,7 +61,7 @@ const LossRecordForm: React.FC<{
     useEffect(() => {
         const loadItems = async () => {
             if (formData.sector) {
-                // Se tipo de perda for SUPPLY, carregar supplies
+                // Se tipo de perda for INSUMO, carregar insumos
                 if (formData.lossType === LossType.INSUMO) {
                     try {
                         const allSupplies = await suppliesService.getAll();
@@ -169,22 +171,21 @@ const LossRecordForm: React.FC<{
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         {formData.lossType === LossType.INSUMO ? 'Nome do Insumo *' : 'Nome do Produto *'}
                     </label>
-                    <select
+                    <AutocompleteInput
                         value={formData.product}
-                        onChange={e => handleProductChange(e.target.value)}
-                        disabled={!formData.sector || !formData.lossType}
-                        className={`${inputClass} disabled:bg-gray-100 dark:disabled:bg-slate-800`}
-                    >
-                        <option value="">
-                            {!formData.sector ? 'Selecione um setor primeiro' :
-                                !formData.lossType ? 'Selecione o tipo de perda primeiro' :
-                                    'Selecione'}
-                        </option>
-                        {formData.lossType === LossType.INSUMO
-                            ? availableSupplies.map(s => <option key={s.id} value={s.name}>{s.name}</option>)
-                            : availableProducts.map(p => <option key={p.id} value={p.name}>{p.name}</option>)
+                        onChange={(value) => handleProductChange(value)}
+                        options={formData.lossType === LossType.INSUMO
+                            ? availableSupplies.map(s => ({ id: s.id, name: s.name }))
+                            : availableProducts.map(p => ({ id: p.id, name: p.name }))
                         }
-                    </select>
+                        placeholder={
+                            !formData.sector ? 'Selecione um setor primeiro' :
+                                !formData.lossType ? 'Selecione o tipo de perda primeiro' :
+                                    formData.lossType === LossType.INSUMO ? 'Digite o nome do insumo...' : 'Digite o nome do produto...'
+                        }
+                        disabled={!formData.sector || !formData.lossType}
+                        emptyMessage={formData.lossType === LossType.INSUMO ? 'Nenhum insumo encontrado' : 'Nenhum produto encontrado'}
+                    />
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantidade *</label>
@@ -297,7 +298,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             if (tableFilters.sector !== 'Todos' && normalize(String(rec.sector)) !== normalize(tableFilters.sector)) return false;
             if (tableFilters.type !== 'Todos' && rec.lossType !== tableFilters.type) return false;
             return true;
-        }).sort((a, b) => a.sector.localeCompare(b.sector));
+        }); // Ordenação removida - agora vem do backend (data DESC, setor ASC, produto ASC)
     }, [records, tableFilters]);
 
 
@@ -378,12 +379,14 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             };
 
             if (currentRecord) {
-                const updated = await lossesService.update(currentRecord.id, normalizedData);
-                setRecords(records.map(r => r.id === currentRecord.id ? updated : r));
+                await lossesService.update(currentRecord.id, normalizedData);
             } else {
-                const created = await lossesService.create(normalizedData);
-                setRecords([...records, created]);
+                await lossesService.create(normalizedData);
             }
+
+            // Recarregar todos os registros para garantir ordenação correta do backend
+            const updatedRecords = await lossesService.getAll();
+            setRecords(updatedRecords);
             handleCloseModal();
         } catch (error: any) {
             console.error('Erro ao salvar perda:', error);
@@ -501,7 +504,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartContainer title="Perdas por Setor (KG)">
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: -20, bottom: 20 }}>
+                        <ComposedChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                             <XAxis
                                 dataKey="name"
@@ -511,7 +514,9 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                             <YAxis yAxisId="right" orientation="right" tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value, name) => name === 'Custo (R$)' ? `R$ ${Number(value).toFixed(2)}` : `${value} KG`} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
-                            <Bar yAxisId="left" dataKey="Perdas (KG)" fill={COLORS.error} barSize={20} radius={[4, 4, 0, 0]} name="Perdas (KG)" />
+                            <Bar yAxisId="left" dataKey="Perdas (KG)" fill={COLORS.error} barSize={45} radius={[4, 4, 0, 0]} name="Perdas (KG)">
+                                <LabelList dataKey="Perdas (KG)" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#E74C3C', fontSize: 16, fontWeight: 600 }} />
+                            </Bar>
                             <Line yAxisId="right" type="monotone" dataKey="Custo (R$)" stroke={COLORS.tertiary} strokeWidth={2} name="Custo (R$)" dot={false} />
                         </ComposedChart>
                     </ResponsiveContainer>
@@ -519,7 +524,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
 
                 <ChartContainer title="Perdas de Massas">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData} margin={{ top: 5, right: 20, left: -20, bottom: 20 }}>
+                        <BarChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                             <XAxis
                                 dataKey="name"
@@ -528,14 +533,16 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                             <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value) => `${value} KG`} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
-                            <Bar dataKey="Massa (KG)" fill={COLORS.primary} barSize={30} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="Massa (KG)" fill={COLORS.primary} barSize={45} radius={[4, 4, 0, 0]}>
+                                <LabelList dataKey="Massa (KG)" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#D99B61', fontSize: 16, fontWeight: 600 }} />
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartContainer>
 
                 <ChartContainer title="Perdas de Embalagens">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData} margin={{ top: 5, right: 20, left: -20, bottom: 20 }}>
+                        <BarChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                             <XAxis
                                 dataKey="name"
@@ -544,14 +551,16 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                             <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value) => `${value} KG`} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
-                            <Bar dataKey="Embalagem (KG)" fill={COLORS.secondary} barSize={30} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="Embalagem (KG)" fill={COLORS.secondary} barSize={45} radius={[4, 4, 0, 0]}>
+                                <LabelList dataKey="Embalagem (KG)" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#F3C78A', fontSize: 16, fontWeight: 600 }} />
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartContainer>
 
                 <ChartContainer title="Perdas de Insumos">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData} margin={{ top: 5, right: 20, left: -20, bottom: 20 }}>
+                        <BarChart data={chartData} margin={{ top: 20, right: 20, left: -20, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                             <XAxis
                                 dataKey="name"
@@ -560,7 +569,9 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                             <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                             <Tooltip contentStyle={tooltipStyle} formatter={(value) => `${value} KG`} />
                             <Legend wrapperStyle={{ fontSize: '14px' }} />
-                            <Bar dataKey="Insumo (KG)" fill={COLORS.tertiary} barSize={30} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="Insumo (KG)" fill={COLORS.tertiary} barSize={45} radius={[4, 4, 0, 0]}>
+                                <LabelList dataKey="Insumo (KG)" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#B36B3C', fontSize: 16, fontWeight: 600 }} />
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </ChartContainer>
@@ -647,7 +658,7 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                                     <td className="px-6 py-4">{new Date(rec.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
                                     <td className="px-6 py-4">{rec.sector}</td>
                                     <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-100">{rec.product}</td>
-                                    <td className="px-6 py-4">{rec.lossType}</td>
+                                    <td className="px-6 py-4">{rec.lossType.toUpperCase()}</td>
                                     <td className="px-6 py-4 text-right">{rec.quantity} {rec.unit}</td>
                                     <td className="px-6 py-4 font-semibold text-right">{rec.totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
                                     {!isEspectador() && (

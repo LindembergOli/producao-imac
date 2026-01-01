@@ -23,7 +23,7 @@ const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const DatePickerInput: React.FC<DatePickerInputProps> = ({ value, onChange, label, className = '', disabled = false, type = 'date' }) => {
     const [isOpen, setIsOpen] = useState(false);
 
-    // Parse initial date or default to today
+    // Analisar data inicial ou usar hoje como padrão
     const initialDate = useMemo(() => {
         if (!value) return new Date();
         const parts = value.split('-').map(Number);
@@ -51,8 +51,8 @@ const DatePickerInput: React.FC<DatePickerInputProps> = ({ value, onChange, labe
 
     const toggleMonthView = () => {
         if (type === 'month') {
-            // In month mode, toggling month view might just keep it or go to years? 
-            // Logic: If in months, go to years. If in years, go to months.
+            // No modo mês, alternar visualização de mês pode mantê-la ou ir para anos
+            // Lógica: Se em meses, vai para anos. Se em anos, vai para meses.
             setCurrentView(v => v === 'months' ? 'years' : 'months');
         } else {
             setCurrentView(v => v === 'months' ? 'days' : 'months');
@@ -160,7 +160,7 @@ const DatePickerInput: React.FC<DatePickerInputProps> = ({ value, onChange, labe
     // Generate calendar grid
     const renderCalendar = () => {
         const days = [];
-        // Empty slots for days before start of month
+        // Espaços vazios para dias antes do início do mês
         for (let i = 0; i < startDay; i++) {
             days.push(<div key={`empty-${i}`} className="h-10 w-10" />);
         }
@@ -194,7 +194,7 @@ const DatePickerInput: React.FC<DatePickerInputProps> = ({ value, onChange, labe
         return days;
     };
 
-    // Portal for Modal to avoid z-index issues
+    // Portal para Modal para evitar problemas de z-index
     const Modal = () => createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">

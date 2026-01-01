@@ -236,6 +236,7 @@ model ProductionSpeed {
   dailyProduction Json
   totalProgramado Float
   totalRealizado  Float
+  totalRealizadoKgUnd Float @default(0) @map("total_realizado_kg_und")
   velocidade      Float
 
   createdAt DateTime @default(now())

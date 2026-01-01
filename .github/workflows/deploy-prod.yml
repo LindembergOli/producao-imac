@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: Deploy para Produção
 
 on:
   push:
@@ -9,78 +9,78 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Production
+    name: Deploy para Produção
     runs-on: ubuntu-latest
-    environment: production
+    # environment: production  # Descomente após criar o ambiente 'production' nas Configurações do GitHub
     
     steps:
-      - name: Checkout code
+      - name: Fazer checkout do código
         uses: actions/checkout@v4
       
-      - name: Setup SSH
+      - name: Configurar SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
       
-      - name: Add server to known hosts
+      - name: Adicionar servidor aos hosts conhecidos
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.PROD_SSH_HOST }} >> ~/.ssh/known_hosts
       
-      - name: Create .env file
+      - name: Criar arquivo .env
         run: |
           echo "${{ secrets.PROD_ENV_FILE }}" > .env
       
-      - name: Copy files to server
+      - name: Copiar arquivos para o servidor
         run: |
           scp docker-compose.prod.yml ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:~/imac-app/
           scp nginx-proxy.conf ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:~/imac-app/
           scp .env ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}:~/imac-app/
       
-      - name: Backup current deployment
+      - name: Fazer backup do deployment atual
         run: |
           ssh ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} << 'EOF'
             cd ~/imac-app
             
-            # Create backup
+            # Criar backup
             BACKUP_DIR=~/backups/$(date +%Y%m%d_%H%M%S)
             mkdir -p $BACKUP_DIR
             
-            # Backup database
+            # Backup do banco de dados
             docker-compose -f docker-compose.prod.yml exec -T postgres \
               pg_dump -U $POSTGRES_USER $POSTGRES_DB > $BACKUP_DIR/database.sql
             
             echo "✅ Backup created at $BACKUP_DIR"
           EOF
       
-      - name: Deploy via SSH
+      - name: Fazer deploy via SSH
         run: |
           ssh ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} << 'EOF'
             cd ~/imac-app
             
-            # Pull latest images
+            # Baixar imagens mais recentes
             docker-compose -f docker-compose.prod.yml pull
             
-            # Stop current containers
+            # Parar containers atuais
             docker-compose -f docker-compose.prod.yml down
             
-            # Start new containers
+            # Iniciar novos containers
             docker-compose -f docker-compose.prod.yml up -d
             
-            # Run migrations
+            # Executar migrações
             sleep 15
             docker-compose -f docker-compose.prod.yml exec -T backend npx prisma migrate deploy
             
-            # Show status
+            # Mostrar status
             docker-compose -f docker-compose.prod.yml ps
           EOF
       
-      - name: Health Check
+      - name: Verificação de Saúde
         run: |
           sleep 20
           curl -f http://${{ secrets.PROD_SSH_HOST }}/health || exit 1
       
-      - name: Rollback on Failure
+      - name: Reverter em Caso de Falha
         if: failure()
         run: |
           ssh ${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }} << 'EOF'
@@ -88,20 +88,20 @@ jobs:
             
             echo "❌ Deployment failed! Rolling back..."
             
-            # Get latest backup
+            # Obter backup mais recente
             LATEST_BACKUP=$(ls -t ~/backups/ | head -1)
             
-            # Restore database
+            # Restaurar banco de dados
             docker-compose -f docker-compose.prod.yml exec -T postgres \
               psql -U $POSTGRES_USER $POSTGRES_DB < ~/backups/$LATEST_BACKUP/database.sql
             
-            # Restart with previous version
+            # Reiniciar com versão anterior
             docker-compose -f docker-compose.prod.yml up -d
             
             echo "✅ Rollback completed"
           EOF
       
-      - name: Deployment Summary
+      - name: Resumo do Deployment
         if: success()
         run: |
           echo "✅ Deployment to Production successful!"

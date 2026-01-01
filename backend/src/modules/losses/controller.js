@@ -2,6 +2,16 @@ import * as lossService from './service.js';
 import { success } from '../../utils/responses.js';
 import { logAudit } from '../../middlewares/audit.js';
 
+// Função para normalizar setor (remover acentos)
+const normalizeSector = (sector) => {
+    if (!sector) return sector;
+    return sector
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/Ç/g, 'C');
+};
+
 export const getAll = async (req, res, next) => {
     try {
         const paginatedResponse = await lossService.getAll();
@@ -26,7 +36,14 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
     try {
-        const record = await lossService.create(req.body);
+        // Normalizar produto para maiúsculas e setor sem acentos
+        const normalizedData = {
+            ...req.body,
+            ...(req.body.sector && { sector: normalizeSector(req.body.sector) }),
+            ...(req.body.product && { product: req.body.product.toUpperCase() }),
+        };
+
+        const record = await lossService.create(normalizedData);
 
         await logAudit({
             userId: req.user?.id,
@@ -45,7 +62,14 @@ export const create = async (req, res, next) => {
 
 export const update = async (req, res, next) => {
     try {
-        const record = await lossService.update(req.params.id, req.body);
+        // Normalizar produto para maiúsculas e setor sem acentos
+        const normalizedData = {
+            ...req.body,
+            ...(req.body.sector && { sector: normalizeSector(req.body.sector) }),
+            ...(req.body.product && { product: req.body.product.toUpperCase() }),
+        };
+
+        const record = await lossService.update(req.params.id, normalizedData);
 
         await logAudit({
             userId: req.user?.id,

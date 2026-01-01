@@ -1,4 +1,4 @@
-name: Deploy to Development
+name: Deploy para Desenvolvimento
 
 on:
   push:
@@ -7,61 +7,61 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Dev Server
+    name: Deploy para Servidor Dev
     runs-on: ubuntu-latest
-    environment: development
+    # environment: development  # Descomente após criar o ambiente 'development' nas Configurações do GitHub
     
     steps:
-      - name: Checkout code
+      - name: Fazer checkout do código
         uses: actions/checkout@v4
       
-      - name: Setup SSH
+      - name: Configurar SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.DEV_SSH_KEY }}
       
-      - name: Add server to known hosts
+      - name: Adicionar servidor aos hosts conhecidos
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.DEV_SSH_HOST }} >> ~/.ssh/known_hosts
       
-      - name: Create .env file
+      - name: Criar arquivo .env
         run: |
           echo "${{ secrets.DEV_ENV_FILE }}" > .env
       
-      - name: Copy files to server
+      - name: Copiar arquivos para o servidor
         run: |
           scp docker-compose.yml ${{ secrets.DEV_SSH_USER }}@${{ secrets.DEV_SSH_HOST }}:~/imac-app/
           scp .env ${{ secrets.DEV_SSH_USER }}@${{ secrets.DEV_SSH_HOST }}:~/imac-app/
       
-      - name: Deploy via SSH
+      - name: Fazer deploy via SSH
         run: |
           ssh ${{ secrets.DEV_SSH_USER }}@${{ secrets.DEV_SSH_HOST }} << 'EOF'
             cd ~/imac-app
             
-            # Pull latest images
+            # Baixar imagens mais recentes
             docker-compose pull
             
-            # Stop current containers
+            # Parar containers atuais
             docker-compose down
             
-            # Start new containers
+            # Iniciar novos containers
             docker-compose up -d
             
-            # Run migrations
+            # Executar migrações
             sleep 10
             docker-compose exec -T backend npx prisma migrate deploy
             
-            # Show status
+            # Mostrar status
             docker-compose ps
           EOF
       
-      - name: Health Check
+      - name: Verificação de Saúde
         run: |
           sleep 15
           curl -f http://${{ secrets.DEV_SSH_HOST }}:3001/health || exit 1
       
-      - name: Deployment Summary
+      - name: Resumo do Deployment
         run: |
           echo "✅ Deployment to Development successful!"
           echo "🔗 Frontend: http://${{ secrets.DEV_SSH_HOST }}:3000"

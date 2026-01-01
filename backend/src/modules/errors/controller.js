@@ -2,6 +2,16 @@ import * as errorService from './service.js';
 import { success } from '../../utils/responses.js';
 import { logAudit } from '../../middlewares/audit.js';
 
+// Função para normalizar setor (remover acentos)
+const normalizeSector = (sector) => {
+    if (!sector) return sector;
+    return sector
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+        .replace(/Ç/g, 'C');
+};
+
 export const getAll = async (req, res, next) => {
     try {
         const records = await errorService.getAll();
@@ -22,8 +32,17 @@ export const getById = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
     try {
-        const record = await errorService.create(req.body);
-        
+        // Normalizar campos de texto para maiúsculas e remover acentos do setor
+        const normalizedData = {
+            ...req.body,
+            ...(req.body.sector && { sector: normalizeSector(req.body.sector) }),
+            ...(req.body.product && { product: req.body.product.toUpperCase() }),
+            ...(req.body.description && { description: req.body.description.toUpperCase() }),
+            ...(req.body.action && { action: req.body.action.toUpperCase() }),
+        };
+
+        const record = await errorService.create(normalizedData);
+
         await logAudit({
             userId: req.user?.id,
             action: 'CREATE_RECORD',
@@ -41,8 +60,17 @@ export const create = async (req, res, next) => {
 
 export const update = async (req, res, next) => {
     try {
-        const record = await errorService.update(req.params.id, req.body);
-        
+        // Normalizar campos de texto para maiúsculas e remover acentos do setor
+        const normalizedData = {
+            ...req.body,
+            ...(req.body.sector && { sector: normalizeSector(req.body.sector) }),
+            ...(req.body.product && { product: req.body.product.toUpperCase() }),
+            ...(req.body.description && { description: req.body.description.toUpperCase() }),
+            ...(req.body.action && { action: req.body.action.toUpperCase() }),
+        };
+
+        const record = await errorService.update(req.params.id, normalizedData);
+
         await logAudit({
             userId: req.user?.id,
             action: 'UPDATE_RECORD',
@@ -62,7 +90,7 @@ export const remove = async (req, res, next) => {
     try {
         const record = await errorService.getById(req.params.id);
         await errorService.remove(req.params.id);
-        
+
         await logAudit({
             userId: req.user?.id,
             action: 'DELETE_RECORD',

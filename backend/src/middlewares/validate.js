@@ -18,6 +18,15 @@ export const validate = (schema, source = 'body') => {
             // Selecionar fonte de dados
             const dataToValidate = req[source];
 
+            // Normalizar setor ANTES da validação (remover acentos)
+            if (dataToValidate && dataToValidate.sector) {
+                dataToValidate.sector = dataToValidate.sector
+                    .toUpperCase()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+                    .replace(/Ç/g, 'C');
+            }
+
             // Validar com Zod
             const validatedData = await schema.parseAsync(dataToValidate);
 

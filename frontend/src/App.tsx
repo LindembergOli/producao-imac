@@ -170,7 +170,7 @@ const App: React.FC = () => {
       case 'Máquinas':
         return <Machines machines={machines} setMachines={setMachines} />;
       case 'Usuários':
-        // Proteção extra: se não for admin, volta pro dashboard
+        // Proteção extra: se não for admin, volta para o dashboard
         if (!isAdmin()) {
           setTimeout(() => setCurrentPage('Dashboard'), 0);
           return <Dashboard
