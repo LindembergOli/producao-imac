@@ -79,7 +79,6 @@ imac-congelados/
 │   │   ├── app.js        # Configuração Express
 │   │   └── server.js     # Entry point
 │   ├── prisma/           # Schema e migrações
-│   └── tests/            # Testes automatizados
 │
 ├── frontend/             # React App
 │   ├── src/
@@ -90,7 +89,6 @@ imac-congelados/
 │   │   ├── hooks/        # Custom hooks
 │   │   ├── types/        # TypeScript types
 │   │   └── utils/        # Utilitários
-│   └── tests/            # Testes de componentes
 │
 ├── infra/                # Infraestrutura
 │   ├── docker/           # Docker Compose
@@ -104,7 +102,6 @@ imac-congelados/
     ├── DATA_GOVERNANCE.md
     ├── DEPLOYMENT.md
     ├── DEVELOPMENT.md
-    ├── DOCKER_QUICKSTART.md
     ├── FRONTEND.md
     ├── SECURITY.md
     └── TROUBLESHOOTING.md
