@@ -27,7 +27,6 @@ backend/
 │   ├── app.js          # Configuração do Express
 │   └── server.js       # Ponto de entrada
 ├── prisma/             # Schema e migrações
-└── tests/              # Testes automatizados
 ```
 
 ---
