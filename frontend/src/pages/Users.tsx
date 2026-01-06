@@ -8,16 +8,21 @@
 import React, { useState, useEffect } from 'react';
 import { User, usersService } from '../services/modules/users';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Trash2, Shield, User as UserIcon, Mail, Lock, Pencil } from 'lucide-react';
+import { Plus, Trash2, Shield, User as UserIcon, Mail, Lock, Pencil, Eye } from 'lucide-react';
 import { Sector } from '../types';
+import ViewModal from '../components/ViewModal';
 
 export default function Users() {
-    const { register } = useAuth();
+    const { register, isEspectador } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [isEditing, setIsEditing] = useState(false);
+
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<User | null>(null);
 
     // Form state
     const [formData, setFormData] = useState({
@@ -135,13 +140,15 @@ export default function Users() {
                     <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Gerenciamento de Usuários</h1>
                     <p className="text-slate-600 dark:text-slate-400">Controle de acesso e permissões do sistema</p>
                 </div>
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 bg-imac-primary text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition-colors"
-                >
-                    <Plus className="w-5 h-5" />
-                    Novo Usuário
-                </button>
+                {!isEspectador() && (
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="flex items-center gap-2 bg-imac-primary text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition-colors"
+                    >
+                        <Plus className="w-5 h-5" />
+                        Novo Usuário
+                    </button>
+                )}
             </div>
 
             {/* Users List */}
@@ -153,7 +160,7 @@ export default function Users() {
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600 dark:text-slate-300">Usuário</th>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600 dark:text-slate-300">Email</th>
                                 <th className="px-6 py-4 text-left text-sm font-semibold text-slate-600 dark:text-slate-300">Função</th>
-                                <th className="px-6 py-4 text-right text-sm font-semibold text-slate-600 dark:text-slate-300">Ações</th>
+                                <th className="px-6 py-4 text-center text-sm font-semibold text-slate-600 dark:text-slate-300">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
@@ -173,22 +180,33 @@ export default function Users() {
                                             {roleLabels[user.role] || user.role}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <div className="flex items-center justify-end gap-2">
+                                    <td className="px-6 py-4 text-center">
+                                        <div className="flex items-center justify-center gap-2">
                                             <button
-                                                onClick={() => handleEdit(user)}
-                                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                                title="Editar usuário"
+                                                onClick={() => { setViewData(user); setIsViewModalOpen(true); }}
+                                                className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                                title="Visualizar usuário"
                                             >
-                                                <Pencil className="w-5 h-5" />
+                                                <Eye className="w-5 h-5" />
                                             </button>
-                                            <button
-                                                onClick={() => handleDelete(user.id)}
-                                                className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                                                title="Excluir usuário"
-                                            >
-                                                <Trash2 className="w-5 h-5" />
-                                            </button>
+                                            {!isEspectador() && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleEdit(user)}
+                                                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                                        title="Editar usuário"
+                                                    >
+                                                        <Pencil className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(user.id)}
+                                                        className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                        title="Excluir usuário"
+                                                    >
+                                                        <Trash2 className="w-5 h-5" />
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -303,6 +321,18 @@ export default function Users() {
                     </div>
                 </div>
             )}
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes do Usuário"
+                data={viewData}
+                fields={[
+                    { label: 'Nome', key: 'name' },
+                    { label: 'Email', key: 'email' },
+                    { label: 'Função', key: 'role', format: (v: string) => roleLabels[v] || v }
+                ]}
+            />
         </div>
     );
 }

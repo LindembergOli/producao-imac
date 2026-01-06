@@ -33,9 +33,14 @@ export interface EmployeeStats {
 /**
  * Serviço de Funcionários
  */
+/**
+ * Serviço de Funcionários
+ * Gerencia o cadastro, consulta e demissão de funcionários.
+ */
 export const employeesService = {
     /**
-     * Lista todos os funcionários
+     * Lista todos os funcionários cadastrados.
+     * @returns {Promise<Employee[]>} Lista de funcionários formatados.
      */
     getAll: async (): Promise<Employee[]> => {
         const response = await api.get('/employees');
@@ -44,7 +49,9 @@ export const employeesService = {
     },
 
     /**
-     * Busca funcionário por ID
+     * Busca um funcionário pelo ID.
+     * @param {number} id - ID do funcionário.
+     * @returns {Promise<Employee>} O funcionário encontrado.
      */
     getById: async (id: number): Promise<Employee> => {
         const response = await api.get(`/employees/${id}`);
@@ -52,7 +59,9 @@ export const employeesService = {
     },
 
     /**
-     * Busca funcionários por setor
+     * Busca funcionários por setor.
+     * @param {string} sector - Nome do setor.
+     * @returns {Promise<Employee[]>} Lista de funcionários do setor.
      */
     getBySector: async (sector: string): Promise<Employee[]> => {
         const response = await api.get(`/employees/sector/${sector}`);
@@ -60,7 +69,8 @@ export const employeesService = {
     },
 
     /**
-     * Busca estatísticas de funcionários
+     * Busca estatísticas gerais de funcionários (total, pro setor, etc).
+     * @returns {Promise<EmployeeStats>} Objeto com as estatísticas.
      */
     getStats: async (): Promise<EmployeeStats> => {
         const response = await api.get('/employees/stats');
@@ -68,7 +78,9 @@ export const employeesService = {
     },
 
     /**
-     * Cria novo funcionário
+     * Cria um novo funcionário.
+     * @param {Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>} data - Dados do novo funcionário.
+     * @returns {Promise<Employee>} O funcionário criado.
      */
     create: async (data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<Employee> => {
         const response = await api.post('/employees', data);
@@ -76,7 +88,10 @@ export const employeesService = {
     },
 
     /**
-     * Atualiza funcionário existente
+     * Atualiza dados de um funcionário existente.
+     * @param {number} id - ID do funcionário.
+     * @param {Partial<Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>>} data - Dados a serem atualizados.
+     * @returns {Promise<Employee>} O funcionário atualizado.
      */
     update: async (id: number, data: Partial<Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Employee> => {
         const response = await api.put(`/employees/${id}`, data);
@@ -84,7 +99,9 @@ export const employeesService = {
     },
 
     /**
-     * Remove funcionário
+     * Remove um funcionário do sistema.
+     * @param {number} id - ID do funcionário.
+     * @returns {Promise<void>}
      */
     delete: async (id: number): Promise<void> => {
         await api.delete(`/employees/${id}`);

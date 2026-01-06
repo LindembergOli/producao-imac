@@ -13,6 +13,7 @@
  * - /api/errors - Erros de produção
  * - /api/maintenance - Manutenção de máquinas
  * - /api/absenteeism - Absenteísmo
+ * - /api/production-observations - Observações de produção
  */
 
 import { Router } from 'express';
@@ -29,6 +30,7 @@ import maintenanceRoutes from './modules/maintenance/routes.js';
 import absenteeismRoutes from './modules/absenteeism/routes.js';
 import machineRoutes from './modules/machines/routes.js';
 import userRoutes from './modules/users/routes.js';
+import productionObservationsRoutes from './modules/production-observations/routes.js';
 
 const router = Router();
 
@@ -44,5 +46,6 @@ router.use('/maintenance', maintenanceRoutes);
 router.use('/absenteeism', absenteeismRoutes);
 router.use('/machines', machineRoutes);
 router.use('/users', userRoutes);
+router.use('/production-observations', productionObservationsRoutes);
 
 export default router;

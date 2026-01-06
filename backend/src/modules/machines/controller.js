@@ -19,7 +19,12 @@ import { logAudit } from '../../middlewares/audit.js';
 
 /**
  * GET /api/machines
- * Lista todas as máquinas
+ * Lista todas as máquinas cadastradas.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Função de middleware para tratamento de erros.
+ * @returns {Object} JSON com a lista de máquinas.
  */
 export const getAll = async (req, res, next) => {
     try {
@@ -32,7 +37,14 @@ export const getAll = async (req, res, next) => {
 
 /**
  * GET /api/machines/:id
- * Busca máquina por ID
+ * Busca uma máquina específica pelo ID.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {Object} req.params - Parâmetros da rota.
+ * @param {string} req.params.id - ID da máquina.
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Função de middleware para tratamento de erros.
+ * @returns {Object} JSON com os dados da máquina.
  */
 export const getById = async (req, res, next) => {
     try {
@@ -45,7 +57,11 @@ export const getById = async (req, res, next) => {
 
 /**
  * GET /api/machines/code/:code
- * Busca máquina por código
+ * Busca uma máquina pelo código de identificação.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {string} req.params.code - Código da máquina.
+ * @returns {Object} JSON com os dados da máquina.
  */
 export const getByCode = async (req, res, next) => {
     try {
@@ -58,7 +74,11 @@ export const getByCode = async (req, res, next) => {
 
 /**
  * GET /api/machines/sector/:sector
- * Busca máquinas por setor
+ * Busca máquinas filtradas por setor.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {string} req.params.sector - Nome do setor.
+ * @returns {Object} JSON com a lista de máquinas do setor.
  */
 export const getBySector = async (req, res, next) => {
     try {
@@ -71,7 +91,12 @@ export const getBySector = async (req, res, next) => {
 
 /**
  * GET /api/machines/stats
- * Retorna estatísticas de máquinas
+ * Retorna estatísticas gerais das máquinas.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {Object} res - Objeto de resposta.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com estatísticas.
  */
 export const getStats = async (req, res, next) => {
     try {
@@ -84,7 +109,13 @@ export const getStats = async (req, res, next) => {
 
 /**
  * POST /api/machines
- * Cria uma nova máquina
+ * Cria um novo registro de máquina.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {Object} req.body - Dados da nova máquina (nome, setor, código, etc).
+ * @param {Object} res - Objeto de resposta.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com a máquina criada.
  */
 export const create = async (req, res, next) => {
     try {
@@ -113,7 +144,14 @@ export const create = async (req, res, next) => {
 
 /**
  * PUT /api/machines/:id
- * Atualiza dados de uma máquina
+ * Atualiza os dados de uma máquina existente.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {string} req.params.id - ID da máquina.
+ * @param {Object} req.body - Dados a serem atualizados.
+ * @param {Object} res - Objeto de resposta.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com a máquina atualizada.
  */
 export const update = async (req, res, next) => {
     try {

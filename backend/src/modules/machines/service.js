@@ -24,7 +24,11 @@ import { getCached, invalidateCachePattern } from '../../utils/cache.js';
  * @returns {Promise<Array>} Lista de máquinas
  */
 /**
- * Lista todas as máquinas com paginação e cache
+ * Lista todas as máquinas com paginação e suporte a cache.
+ * 
+ * @param {number} [page=1] - Número da página atual.
+ * @param {number} [limit=20] - Quantidade de itens por página.
+ * @returns {Promise<Object>} Objeto com dados paginados e metadados.
  */
 export const getAll = async (page = 1, limit = 20) => {
     const cacheKey = `machines:all:${page}:${limit}`;

@@ -9,17 +9,27 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Modal, { ConfirmModal } from '../components/Modal';
 import { productsService } from '../services/modules/products';
+import { useAuth } from '../contexts/AuthContext';
+import ViewModal from '../components/ViewModal';
+import { Eye } from 'lucide-react';
+import { formatText } from '../utils/formatters';
 
 interface ProductsProps {
     products: Product[];
     setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
 }
 
+/**
+ * Formulário de Cadastro/Edição de Produtos
+ * 
+ * Gerencia os dados do produto, incluindo custos, rendimento e informações fiscais/logísticas.
+ */
 const ProductForm: React.FC<{
     product: Partial<Product> | null;
     onSave: (product: Omit<Product, 'id'>) => void;
     onCancel: () => void;
 }> = ({ product, onSave, onCancel }) => {
+    // ... corpo do componente
     const [formData, setFormData] = useState<{
         name: string;
         sector: Sector | '';
@@ -146,10 +156,21 @@ const ProductForm: React.FC<{
     );
 };
 
+/**
+ * Página de Gerenciamento de Produtos
+ * 
+ * Lista o catálogo de produtos, permitindo filtrar por setor e nome.
+ * Inclui funcionalidades de exportação (Excel/PDF) e CRUD completo.
+ */
 const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
+    const { isEspectador } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<Product | null>(null);
 
     // Estado dos filtros
     const [filters, setFilters] = useState({
@@ -157,6 +178,7 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
         name: ''
     });
 
+    // Filtra e ordena produtos baseado nos critérios selecionados
     const filteredAndSortedProducts = useMemo(() => {
         if (!products || !Array.isArray(products)) return [];
 
@@ -187,6 +209,11 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setCurrentProduct(null);
+    };
+
+    const handleView = (product: Product) => {
+        setViewData(product);
+        setIsViewModalOpen(true);
     };
 
     const handleSave = async (productData: Omit<Product, 'id'>) => {
@@ -354,7 +381,7 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                             <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Unidade</div>
                             <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Rendimento</div>
                             <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Custo por Receita</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-right no-print">Ações</div>
+                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
                         </div>
                         {/* Body */}
                         <div className="mt-2">
@@ -375,13 +402,20 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                                         <div className="col-span-2 text-gray-600 dark:text-gray-400">
                                             {prod.unitCost ? prod.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
                                         </div>
-                                        <div className="col-span-1 flex justify-end items-center gap-2 no-print">
-                                            <button type="button" onClick={() => handleOpenModal(prod)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${prod.name} `}>
-                                                <Pencil size={18} />
+                                        <div className="col-span-1 flex justify-center items-center gap-2 no-print">
+                                            <button type="button" onClick={() => handleView(prod)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" aria-label="Visualizar" title="Visualizar">
+                                                <Eye size={18} />
                                             </button>
-                                            <button type="button" onClick={() => handleDeleteClick(prod.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${prod.name} `}>
-                                                <Trash2 size={18} />
-                                            </button>
+                                            {!isEspectador() && (
+                                                <>
+                                                    <button type="button" onClick={() => handleOpenModal(prod)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${prod.name} `} title="Editar">
+                                                        <Pencil size={18} />
+                                                    </button>
+                                                    <button type="button" onClick={() => handleDeleteClick(prod.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${prod.name} `} title="Excluir">
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ))
@@ -409,6 +443,21 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                 onConfirm={confirmDelete}
                 title="Excluir Produto"
                 message="Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita."
+            />
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes do Produto"
+                data={viewData}
+                fields={[
+                    { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+                    { label: 'Nome', key: 'name' },
+                    { label: 'Unidade', key: 'unit' },
+                    { label: 'Rendimento', key: 'yield' },
+                    { label: 'Custo por Receita', key: 'unitCost', format: (v) => v ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-' },
+                    { label: 'Observações', key: 'notes' }
+                ]}
             />
         </div>
     );

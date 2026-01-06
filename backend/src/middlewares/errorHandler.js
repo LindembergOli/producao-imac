@@ -14,6 +14,15 @@ export class AppError extends Error {
     }
 }
 
+/**
+ * Middleware centralizado para tratamento de erros.
+ * Captura AppError, erros do Prisma, Zod e JWT.
+ * 
+ * @param {Error} err - Objeto de erro capturado.
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Função next (obrigatória para assinatura de erro).
+ */
 export const errorHandler = (err, req, res, next) => {
     let { statusCode = 500, message } = err;
 
@@ -71,7 +80,13 @@ export const errorHandler = (err, req, res, next) => {
     });
 };
 
-// Middleware para rotas não encontradas
+/**
+ * Middleware para capturar rotas inexistentes (404).
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {Object} res - Objeto de resposta.
+ * @param {Function} next - Função next.
+ */
 export const notFound = (req, res, next) => {
     const error = new AppError(`Rota não encontrada: ${req.originalUrl}`, 404);
     next(error);

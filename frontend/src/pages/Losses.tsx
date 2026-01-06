@@ -1,15 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { LossRecord, Product, Supply } from '../types';
 import { Sector, LossType, Unit } from '../types';
-import { formatChartNumber } from '../utils/formatters';
+import { formatChartNumber, formatText } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter, Eye } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart as RechartsLineChart, Line, ComposedChart, LabelList } from 'recharts';
+
 import Modal, { ConfirmModal } from '../components/Modal';
+import ViewModal from '../components/ViewModal';
 import DatePickerInput from '../components/DatePickerInput';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
@@ -227,7 +229,12 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<LossRecord | null>(null);
+
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<LossRecord | null>(null);
 
 
     // Filtros para Visão Geral
@@ -645,7 +652,8 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                                 <th className="px-6 py-3">Tipo</th>
                                 <th className="px-6 py-3 text-right">Quantidade</th>
                                 <th className="px-6 py-3 text-right">Custo (R$)</th>
-                                {!isEspectador() && <th className="px-6 py-3 text-center no-print">Ações</th>}
+
+                                <th className="px-6 py-3 text-center no-print">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="text-gray-600 dark:text-gray-300">
@@ -661,16 +669,21 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                                     <td className="px-6 py-4">{rec.lossType.toUpperCase()}</td>
                                     <td className="px-6 py-4 text-right">{rec.quantity} {rec.unit}</td>
                                     <td className="px-6 py-4 font-semibold text-right">{rec.totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                    {!isEspectador() && (
-                                        <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                                            {canEdit() && (
-                                                <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                                            )}
-                                            {canDelete() && (
-                                                <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                                            )}
-                                        </td>
-                                    )}
+                                    <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                                        <button type="button" onClick={() => { setViewData(rec); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                            <Eye size={18} />
+                                        </button>
+                                        {!isEspectador() && (
+                                            <>
+                                                {canEdit() && (
+                                                    <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                )}
+                                                {canDelete() && (
+                                                    <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                )}
+                                            </>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -724,6 +737,22 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                 onConfirm={confirmDelete}
                 title="Excluir Perda"
                 message="Tem certeza que deseja excluir este registro de perda? Esta ação não pode ser desfeita."
+            />
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes da Perda"
+                data={viewData}
+                fields={[
+                    { label: 'Data', key: 'date', format: (v: string) => new Date(v).toLocaleDateString('pt-BR') },
+                    { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+                    { label: 'Produto', key: 'product' },
+                    { label: 'Tipo', key: 'lossType', format: (v: string) => formatText(v) },
+                    { label: 'Quantidade', key: 'quantity', format: (v: number) => `${v} ${viewData?.unit || ''}` },
+                    { label: 'Custo Unit.', key: 'unitCost', format: (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+                    { label: 'Custo Total', key: 'totalCost', format: (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
+                ]}
             />
 
         </div>

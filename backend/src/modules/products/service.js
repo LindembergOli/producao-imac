@@ -42,6 +42,13 @@ export const getAll = async (page = 1, limit = 20) => {
     });
 };
 
+/**
+ * Busca produto por ID.
+ * 
+ * @param {string|number} id - ID do produto.
+ * @returns {Promise<Object>} Dados do produto.
+ * @throws {AppError} Se produto não encontrado.
+ */
 export const getById = async (id) => {
     const product = await prisma.product.findUnique({
         where: { id: parseInt(id) },
@@ -54,6 +61,12 @@ export const getById = async (id) => {
     return product;
 };
 
+/**
+ * Busca produtos por setor.
+ * 
+ * @param {string} sector - Nome do setor.
+ * @returns {Promise<Array>} Lista de produtos.
+ */
 export const getBySector = async (sector) => {
     return await prisma.product.findMany({
         where: {
@@ -65,7 +78,10 @@ export const getBySector = async (sector) => {
 };
 
 /**
- * Cria um novo produto e invalida cache
+ * Cria um novo produto e invalida o cache.
+ * 
+ * @param {Object} data - Dados do produto.
+ * @returns {Promise<Object>} Produto criado.
  */
 export const create = async (data) => {
     const product = await prisma.product.create({ data });
@@ -78,7 +94,11 @@ export const create = async (data) => {
 };
 
 /**
- * Atualiza um produto e invalida cache
+ * Atualiza um produto e invalida o cache.
+ * 
+ * @param {string|number} id - ID do produto.
+ * @param {Object} data - Dados a atualizar.
+ * @returns {Promise<Object>} Produto atualizado.
  */
 export const update = async (id, data) => {
     await getById(id);
@@ -94,6 +114,12 @@ export const update = async (id, data) => {
     return product;
 };
 
+/**
+ * Remove um produto (soft delete).
+ * 
+ * @param {string|number} id - ID do produto.
+ * @returns {Promise<void>}
+ */
 export const remove = async (id) => {
     await getById(id);
 

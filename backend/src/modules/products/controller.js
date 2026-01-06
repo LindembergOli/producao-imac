@@ -1,6 +1,9 @@
 /**
  * MÓDULO: Produtos
- * CONTROLLER
+ * CONTROLLER - Camada de Controle
+ * 
+ * Gerencia as operações HTTP relacionadas aos produtos.
+ * Integra com o serviço de produtos e registra auditoria.
  */
 
 import * as productService from './service.js';
@@ -9,6 +12,16 @@ import { validatePaginationParams } from '../../utils/pagination.js';
 import { logAudit } from '../../middlewares/audit.js';
 import logger from '../../utils/logger.js';
 
+/**
+ * GET /api/products
+ * Lista todos os produtos com paginação.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {Object} req.query - Query params (page, limit).
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com lista de produtos paginada.
+ */
 export const getAll = async (req, res, next) => {
     try {
         const { page, limit } = validatePaginationParams(req.query);
@@ -19,6 +32,16 @@ export const getAll = async (req, res, next) => {
     }
 };
 
+/**
+ * GET /api/products/:id
+ * Busca um produto pelo ID.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {string} req.params.id - ID do produto.
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com os dados do produto.
+ */
 export const getById = async (req, res, next) => {
     try {
         const product = await productService.getById(req.params.id);
@@ -28,6 +51,16 @@ export const getById = async (req, res, next) => {
     }
 };
 
+/**
+ * GET /api/products/sector/:sector
+ * Busca produtos por setor.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {string} req.params.sector - Nome do setor.
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com lista de produtos do setor.
+ */
 export const getBySector = async (req, res, next) => {
     try {
         const products = await productService.getBySector(req.params.sector);
@@ -37,6 +70,16 @@ export const getBySector = async (req, res, next) => {
     }
 };
 
+/**
+ * POST /api/products
+ * Cria um novo produto.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {Object} req.body - Dados do produto (nome, setor, custo, etc).
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com o produto criado.
+ */
 export const create = async (req, res, next) => {
     try {
         console.log('📦 Dados recebidos para criar produto:', JSON.stringify(req.body, null, 2));
@@ -64,6 +107,17 @@ export const create = async (req, res, next) => {
     }
 };
 
+/**
+ * PUT /api/products/:id
+ * Atualiza um produto existente.
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {string} req.params.id - ID do produto.
+ * @param {Object} req.body - Dados a serem atualizados.
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON com o produto atualizado.
+ */
 export const update = async (req, res, next) => {
     try {
         console.log('📝 Dados recebidos para atualizar produto:', JSON.stringify(req.body, null, 2));
@@ -92,6 +146,16 @@ export const update = async (req, res, next) => {
     }
 };
 
+/**
+ * DELETE /api/products/:id
+ * Deleta um produto (soft delete).
+ * 
+ * @param {Object} req - Objeto de requisição Express.
+ * @param {string} req.params.id - ID do produto.
+ * @param {Object} res - Objeto de resposta Express.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} JSON confirmando a deleção.
+ */
 export const remove = async (req, res, next) => {
     try {
         // Buscar produto antes de deletar para registrar detalhes

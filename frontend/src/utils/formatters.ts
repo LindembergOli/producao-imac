@@ -10,6 +10,7 @@
  * formatBrazilianNumber(0.4, 1) => "0,4"
  */
 export const formatBrazilianNumber = (value: number, decimals: number = 2): string => {
+    if (value === undefined || value === null) return '-';
     return value.toLocaleString('pt-BR', {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals
@@ -44,4 +45,47 @@ export const formatChartNumber = (value: number): string => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
+};
+
+/**
+ * Formata texto para exibição amigável (Title Case, remove underscores)
+ * Útil para exibir Enums ou chaves de banco de dados.
+ * 
+ * Exemplos:
+ * formatText("PAO_DE_QUEIJO") => "Pão De Queijo" (com mapeamento específico se houver)
+ * formatText("FALTA_INJUSTIFICADA") => "Falta Injustificada"
+ */
+export const formatText = (value: string): string => {
+    if (!value) return '-';
+
+    // Mapeamentos específicos para corrigir acentuação perdida
+    const map: Record<string, string> = {
+        'PAO_DE_QUEIJO': 'Pão de Queijo',
+        'PAES': 'Pães',
+        'MANUTENCAO': 'Manutenção',
+        'PRODUCAO': 'Produção',
+        'CONFEITARIA': 'Confeitaria',
+        'SALGADO': 'Salgado',
+        'EMBALADORA': 'Embaladora',
+        'ATESTADO': 'Atestado',
+        'FALTA_INJUSTIFICADA': 'Falta Injustificada',
+        'BANCO_DE_HORAS': 'Banco de Horas',
+        'OPERACIONAL': 'Operacional',
+        'EQUIPAMENTO': 'Equipamento',
+        'MATERIAL': 'Material',
+        'QUALIDADE': 'Qualidade',
+        'EM_ABERTO': 'Em Aberto',
+        'FECHADO': 'Fechado'
+    };
+
+    const upperVal = String(value).toUpperCase();
+    if (map[upperVal]) {
+        return map[upperVal];
+    }
+
+    // Fallback genérico: Substituir _ por espaço e Capitalizar primeira letra de cada palavra
+    return String(value)
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/(?:^|\s)\S/g, function (a) { return a.toUpperCase(); });
 };

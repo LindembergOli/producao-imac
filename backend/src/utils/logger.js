@@ -60,7 +60,14 @@ if (config.isDevelopment) {
     );
 }
 
-// Middleware para logar requisições HTTP
+/**
+ * Middleware para logar requisições HTTP.
+ * Registra método, URL, status, duração e IP.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {Object} res - Objeto de resposta.
+ * @param {Function} next - Função next.
+ */
 export const httpLogger = (req, res, next) => {
     const start = Date.now();
 

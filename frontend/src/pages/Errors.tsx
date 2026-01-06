@@ -2,15 +2,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { ErrorRecord, Product } from '../types';
 import { Sector, ErrorCategory } from '../types';
-import { formatChartNumber } from '../utils/formatters';
+import { formatChartNumber, formatText } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Pencil, Trash2, List, File, TriangleAlert, DollarSign, HelpCircle, Star, TrendingUp, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, File, TriangleAlert, DollarSign, HelpCircle, Star, TrendingUp, Filter, Eye } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
+
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Bar, LabelList } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
+import ViewModal from '../components/ViewModal';
 import DatePickerInput from '../components/DatePickerInput';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
@@ -203,7 +205,12 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<ErrorRecord | null>(null);
+
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<ErrorRecord | null>(null);
 
     const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
@@ -655,7 +662,8 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                 <th className="px-6 py-3">Ação</th>
                                 <th className="px-6 py-3 text-right">Qtd. Desp. (KG)</th>
                                 <th className="px-6 py-3 text-right">Custo (R$)</th>
-                                {!isEspectador() && <th className="px-6 py-3 text-center no-print">Ações</th>}
+
+                                <th className="px-6 py-3 text-center no-print">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="text-gray-600 dark:text-gray-300">
@@ -673,16 +681,21 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                                     <td className="px-6 py-4 truncate max-w-xs">{rec.action || '-'}</td>
                                     <td className="px-6 py-4 text-right font-medium text-red-500">{rec.wastedQty ? `${rec.wastedQty}` : '-'}</td>
                                     <td className="px-6 py-4 text-right font-semibold">{rec.cost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                    {!isEspectador() && (
-                                        <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                                            {canEdit() && (
-                                                <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                                            )}
-                                            {canDelete() && (
-                                                <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                                            )}
-                                        </td>
-                                    )}
+                                    <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                                        <button type="button" onClick={() => { setViewData(rec); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                            <Eye size={18} />
+                                        </button>
+                                        {!isEspectador() && (
+                                            <>
+                                                {canEdit() && (
+                                                    <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                )}
+                                                {canDelete() && (
+                                                    <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                )}
+                                            </>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -736,6 +749,23 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
                 onConfirm={confirmDelete}
                 title="Excluir Erro"
                 message="Tem certeza que deseja excluir este registro de erro? Esta ação não pode ser desfeita."
+            />
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes do Erro"
+                data={viewData}
+                fields={[
+                    { label: 'Data', key: 'date', format: (v: string) => new Date(v).toLocaleDateString('pt-BR') },
+                    { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+                    { label: 'Produto', key: 'product' },
+                    { label: 'Categoria', key: 'category', format: (v: string) => formatText(v) },
+                    { label: 'Descrição', key: 'description' },
+                    { label: 'Ação Tomada', key: 'action' },
+                    { label: 'Qtd. Desperdiçada', key: 'wastedQty', format: (v: number) => `${v || 0} KG` },
+                    { label: 'Custo', key: 'cost', format: (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }
+                ]}
             />
 
         </div>

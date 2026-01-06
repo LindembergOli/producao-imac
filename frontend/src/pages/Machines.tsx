@@ -1,18 +1,27 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Cpu, Pencil, Trash2, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Cpu, Pencil, Trash2, FileSpreadsheet, FileText, Eye } from 'lucide-react';
 import { Machine, Sector, Unit, LossType, ErrorCategory, MaintenanceStatus, AbsenceType } from '../types';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Modal, { ConfirmModal } from '../components/Modal';
+import ViewModal from '../components/ViewModal';
 import { useAuth } from '../contexts/AuthContext';
 import { machinesService } from '../services/modules/machines';
+import { formatText } from '../utils/formatters';
 
+/**
+ * Formulário de Cadastro/Edição de Máquinas
+ * 
+ * Permite cadastrar ou editar equipamentos.
+ * Valida o preenchimento de campos obrigatórios (setor, nome, código).
+ */
 const MachineForm: React.FC<{
     machine: Partial<Machine> | null;
     onSave: (machine: Omit<Machine, 'id'>) => void;
     onCancel: () => void;
 }> = ({ machine, onSave, onCancel }) => {
+    // ... corpo do componente
     const [formData, setFormData] = useState({
         name: machine?.name || '',
         code: machine?.code || '',
@@ -95,11 +104,21 @@ interface MachinesProps {
     setMachines: React.Dispatch<React.SetStateAction<Machine[]>>;
 }
 
+/**
+ * Página de Gerenciamento de Máquinas
+ * 
+ * Lista todas as máquinas da fábrica, permitindo filtragem por setor, nome e código.
+ * Oferece funcionalidades de consulta, criação, edição e exclusão.
+ */
 const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
     const { user, canCreate, canEdit, canDelete, isEspectador } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentMachine, setCurrentMachine] = useState<Machine | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<Machine | null>(null);
 
     // Estado dos filtros
     const [filters, setFilters] = useState({
@@ -108,6 +127,7 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
         code: ''
     });
 
+    // Filtra lista de máquinas conforme critérios definidos
     const filteredAndSortedMachines = useMemo(() => {
         if (!machines || !Array.isArray(machines)) return [];
 
@@ -143,6 +163,11 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setCurrentMachine(null);
+    };
+
+    const handleView = (machine: Machine) => {
+        setViewData(machine);
+        setIsViewModalOpen(true);
     };
 
     const handleSave = async (machineData: Omit<Machine, 'id'>) => {
@@ -321,7 +346,7 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
                             <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
                             <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome do Equipamento</div>
                             <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Código</div>
-                            {!isEspectador() && <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-right no-print">Ações</div>}
+                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
                         </div>
 
                         {/* Body */}
@@ -338,21 +363,22 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
                                     <div key={mac.id} className="grid grid-cols-10 gap-4 items-center px-4 py-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
                                         <div className="col-span-3 text-gray-600 dark:text-gray-300">{mac.sector}</div>
                                         <div className="col-span-4 font-medium text-gray-800 dark:text-gray-100">{mac.name}</div>
-                                        <div className="col-span-2 text-gray-600 dark:text-gray-400">{mac.code}</div>
-                                        {!isEspectador() && (
-                                            <div className="col-span-1 flex justify-end items-center gap-2 no-print">
-                                                {canEdit() && (
-                                                    <button type="button" onClick={() => handleOpenModal(mac)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${mac.name}`}>
-                                                        <Pencil size={18} />
-                                                    </button>
-                                                )}
-                                                {canDelete() && (
-                                                    <button type="button" onClick={() => handleDeleteClick(mac.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${mac.name}`}>
-                                                        <Trash2 size={18} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
+                                        <div className="col-span-2 text-gray-600 dark:text-gray-300">{mac.code}</div>
+                                        <div className="col-span-1 flex justify-center items-center gap-2 no-print">
+                                            <button type="button" onClick={() => handleView(mac)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" aria-label="Visualizar" title="Visualizar">
+                                                <Eye size={18} />
+                                            </button>
+                                            {canEdit() && (
+                                                <button type="button" onClick={() => handleOpenModal(mac)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${mac.name}`} title="Editar">
+                                                    <Pencil size={18} />
+                                                </button>
+                                            )}
+                                            {canDelete() && (
+                                                <button type="button" onClick={() => handleDeleteClick(mac.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${mac.name}`} title="Excluir">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 ))
                             )}
@@ -379,6 +405,18 @@ const Machines: React.FC<MachinesProps> = ({ machines, setMachines }) => {
                 onConfirm={confirmDelete}
                 title="Excluir Máquina"
                 message="Tem certeza que deseja excluir esta máquina? Esta ação não pode ser desfeita."
+            />
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes da Máquina"
+                data={viewData}
+                fields={[
+                    { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+                    { label: 'Nome do Equipamento', key: 'name' },
+                    { label: 'Código', key: 'code' }
+                ]}
             />
         </div>
     );

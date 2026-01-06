@@ -1,19 +1,21 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import type { ProductionSpeedRecord, Product, DailyProduction } from '../types';
+import type { ProductionSpeedRecord, Product, DailyProduction, ProductionObservationRecord } from '../types';
 import { Sector, Unit } from '../types';
 import { formatChartNumber } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Pencil, Trash2, TrendingUp, List, File, Activity, ArrowRight, ArrowLeftRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, TrendingUp, List, File, Activity, ArrowRight, ArrowLeftRight, FileText, Eye } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { ComposedChart, Line, Bar, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
+import ViewModal from '../components/ViewModal';
 import DatePickerInput from '../components/DatePickerInput';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
 import { productionService } from '../services/modules/production';
+import { productionObservationsService } from '../services/modules/productionObservations';
 
 const COLORS = {
     primary: '#D99B61',
@@ -191,14 +193,148 @@ const ProductionRecordForm: React.FC<{
     );
 };
 
+// ============================================================================
+// COMPONENTE: ObservationRecordForm
+// ============================================================================
+const ObservationRecordForm: React.FC<{
+    record: Partial<ProductionObservationRecord> | null;
+    onSave: (record: Omit<ProductionObservationRecord, 'id'>) => void;
+    onCancel: () => void;
+    products: Product[];
+}> = ({ record, onSave, onCancel, products }) => {
+
+    const [formData, setFormData] = useState<Omit<ProductionObservationRecord, 'id'>>({
+        date: record?.date ? new Date(record.date).toISOString().substring(0, 10) : new Date().toISOString().substring(0, 10),
+        sector: (record?.sector && Sector[record.sector as keyof typeof Sector]) || record?.sector || Sector.CONFEITARIA,
+        product: record?.product || '',
+        observationType: record?.observationType || '',
+        description: record?.description || '',
+        hadImpact: record?.hadImpact ?? false
+    });
+
+    const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+
+    const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+    useEffect(() => {
+        if (!Array.isArray(products)) return;
+        setAvailableProducts(products.filter(p => normalize(String(p.sector)) === normalize(String(formData.sector))));
+
+        const recordSector = record?.sector ? (Sector[record.sector as keyof typeof Sector] || record.sector) : null;
+        if (recordSector && recordSector !== formData.sector) {
+            setFormData(f => ({ ...f, product: '' }));
+        }
+    }, [formData.sector, record?.sector, products]);
+
+    const handleSave = () => {
+        if (!formData.date || !formData.product || !formData.observationType || !formData.description) {
+            alert('Por favor, preencha todos os campos obrigatórios.');
+            return;
+        }
+        onSave(formData);
+    };
+
+    const inputClass = "mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white";
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Data *</label>
+                    <DatePickerInput
+                        value={formData.date}
+                        onChange={(date) => setFormData({ ...formData, date })}
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Setor *</label>
+                    <select
+                        value={formData.sector}
+                        onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })}
+                        className={inputClass}
+                    >
+                        {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Produto *</label>
+                    <AutocompleteInput
+                        value={formData.product}
+                        onChange={(value) => setFormData({ ...formData, product: value })}
+                        options={availableProducts.map(p => ({ id: p.id, name: p.name }))}
+                        placeholder={formData.sector ? 'Digite o nome do produto...' : 'Selecione um setor primeiro'}
+                        disabled={!formData.sector}
+                        emptyMessage="Nenhum produto encontrado para este setor"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Observação *</label>
+                    <input
+                        type="text"
+                        value={formData.observationType}
+                        onChange={e => setFormData({ ...formData, observationType: e.target.value })}
+                        className={inputClass}
+                        placeholder="Ex: Qualidade, Processo, Equipamento..."
+                    />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição *</label>
+                <textarea
+                    value={formData.description}
+                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                    className={inputClass}
+                    rows={4}
+                    placeholder="Descreva a observação em detalhes..."
+                />
+            </div>
+
+            <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Houve Impacto na Produção? *</label>
+                <select
+                    value={formData.hadImpact ? 'SIM' : 'NÃO'}
+                    onChange={e => setFormData({ ...formData, hadImpact: e.target.value === 'SIM' })}
+                    className={inputClass}
+                >
+                    <option value="NÃO">NÃO</option>
+                    <option value="SIM">SIM</option>
+                </select>
+            </div>
+
+            <div className="flex justify-end pt-6">
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-white px-4 py-2 rounded-lg mr-2 hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold"
+                >
+                    Cancelar
+                </button>
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    className="bg-imac-success text-white px-6 py-2 rounded-lg hover:opacity-90 font-semibold"
+                >
+                    {record?.id ? 'Salvar' : 'Criar'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
 interface ProductionSpeedProps {
     products: Product[];
     records: ProductionSpeedRecord[];
     setRecords: React.Dispatch<React.SetStateAction<ProductionSpeedRecord[]>>;
+    observationRecords: ProductionObservationRecord[];
+    setObservationRecords: React.Dispatch<React.SetStateAction<ProductionObservationRecord[]>>;
     isDarkMode: boolean;
 }
 
-const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, setRecords, isDarkMode }) => {
+const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, setRecords, observationRecords, setObservationRecords, isDarkMode }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<ProductionSpeedRecord | null>(null);
@@ -214,6 +350,23 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         sector: 'Todos',
         product: ''
     });
+
+    // Estados para observações
+    const [isObservationModalOpen, setIsObservationModalOpen] = useState(false);
+    const [currentObservation, setCurrentObservation] = useState<ProductionObservationRecord | null>(null);
+    const [deleteObservationId, setDeleteObservationId] = useState<number | null>(null);
+    const [observationFilters, setObservationFilters] = useState({
+        date: '',
+        sector: 'Todos',
+        product: '',
+        observationType: ''
+    });
+
+    // Estados para visualização genérica (Records e Observations)
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<any | null>(null);
+    const [viewTitle, setViewTitle] = useState('');
+    const [viewFields, setViewFields] = useState<any[]>([]);
 
     const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
@@ -515,6 +668,264 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         return null;
     };
 
+    // ============================================================================
+    // HANDLERS PARA OBSERVAÇÕES
+    // ============================================================================
+    const handleOpenObservationModal = (observation?: ProductionObservationRecord) => {
+        setCurrentObservation(observation || null);
+        setIsObservationModalOpen(true);
+    };
+
+    const handleCloseObservationModal = () => {
+        setIsObservationModalOpen(false);
+        setCurrentObservation(null);
+    };
+
+    const handleSaveObservation = async (data: Omit<ProductionObservationRecord, 'id'>) => {
+        if (!Array.isArray(observationRecords)) return;
+        try {
+            if (currentObservation) {
+                await productionObservationsService.update(currentObservation.id, data);
+            } else {
+                await productionObservationsService.create(data);
+            }
+            const updatedRecords = await productionObservationsService.getAll();
+            setObservationRecords(updatedRecords);
+            handleCloseObservationModal();
+        } catch (error: any) {
+            console.error('Erro ao salvar observação:', error);
+            const msg = error.response?.data?.message || 'Erro ao salvar observação.';
+            const details = error.response?.data?.errors?.map((e: any) => `- ${e.field}: ${e.message}`).join('\n') || '';
+            alert(`${msg}\n${details}`);
+        }
+    };
+
+    const confirmDeleteObservation = async () => {
+        if (!Array.isArray(observationRecords)) return;
+        if (deleteObservationId) {
+            try {
+                await productionObservationsService.delete(deleteObservationId);
+                const updatedRecords = await productionObservationsService.getAll();
+                setObservationRecords(updatedRecords);
+                setDeleteObservationId(null);
+            } catch (error) {
+                console.error('Erro ao deletar observação:', error);
+                alert('Erro ao deletar observação.');
+            }
+        }
+    };
+
+    const handleDeleteObservationClick = (id: number) => {
+        setDeleteObservationId(id);
+    };
+
+    const handleViewRecord = (rec: ProductionSpeedRecord) => {
+        setViewData(rec);
+        setViewTitle('Detalhes do Registro');
+        setViewFields([
+            { label: 'Mês/Ano', key: 'mesAno' },
+            { label: 'Setor', key: 'sector' },
+            { label: 'Produto', key: 'produto' },
+            { label: 'Meta Mês', key: 'metaMes' },
+            { label: 'Programado', key: 'totalProgramado' },
+            { label: 'Realizado', key: 'totalRealizado' },
+            { label: 'Velocidade', key: 'velocidade', format: (v: number) => `${v.toFixed(1)}%` },
+        ]);
+        setIsViewModalOpen(true);
+    };
+
+    const handleViewObservation = (rec: ProductionObservationRecord) => {
+        setViewData(rec);
+        setViewTitle('Detalhes da Observação');
+        setViewFields([
+            { label: 'Data', key: 'date', format: (v: string) => new Date(v).toLocaleDateString('pt-BR') },
+            { label: 'Setor', key: 'sector' },
+            { label: 'Produto', key: 'product' },
+            { label: 'Tipo', key: 'observationType' },
+            { label: 'Impacto', key: 'hadImpact', format: (v: boolean) => v ? 'SIM' : 'NÃO' },
+            { label: 'Descrição', key: 'description' },
+        ]);
+        setIsViewModalOpen(true);
+    };
+
+    // ============================================================================
+    // FILTROS E EXPORTAÇÃO PARA OBSERVAÇÕES
+    // ============================================================================
+    const filteredObservations = useMemo(() => {
+        if (!Array.isArray(observationRecords)) return [];
+        return observationRecords.filter(rec => {
+            if (observationFilters.date && rec.date.substring(0, 7) !== observationFilters.date) return false;
+
+            const readableSector = Sector[rec.sector as keyof typeof Sector] || rec.sector;
+
+            if (observationFilters.sector !== 'Todos' && readableSector !== observationFilters.sector) return false;
+            if (observationFilters.product && !rec.product?.toLowerCase().includes(observationFilters.product.toLowerCase())) return false;
+            if (observationFilters.observationType && !rec.observationType?.toLowerCase().includes(observationFilters.observationType.toLowerCase())) return false;
+            return true;
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [observationRecords, observationFilters]);
+
+    const handleExportObservationsXLSX = () => {
+        if (filteredObservations.length === 0) {
+            alert("Não há dados para exportar.");
+            return;
+        }
+        const dataToExport = filteredObservations.map(r => ({
+            'Data': new Date(r.date).toLocaleDateString('pt-BR'),
+            'Setor': (Sector[r.sector as keyof typeof Sector] || r.sector).toUpperCase(),
+            'Produto': r.product.toUpperCase(),
+            'Tipo de Observação': r.observationType.toUpperCase(),
+            'Descrição': r.description,
+            'Houve Impacto?': r.hadImpact ? 'SIM' : 'NÃO'
+        }));
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Observações");
+        XLSX.writeFile(wb, "observacoes_producao.xlsx");
+    };
+
+    const handleExportObservationsPDF = () => {
+        if (filteredObservations.length === 0) {
+            alert("Não há dados para exportar.");
+            return;
+        }
+        const doc = new jsPDF();
+        doc.text("Relatório de Observações de Produção", 14, 16);
+        autoTable(doc, {
+            head: [['Data', 'Setor', 'Produto', 'Tipo', 'Descrição', 'Impacto?']],
+            body: filteredObservations.map(r => [
+                new Date(r.date).toLocaleDateString('pt-BR'),
+                (Sector[r.sector as keyof typeof Sector] || r.sector).toUpperCase(),
+                r.product.toUpperCase(),
+                r.observationType.toUpperCase(),
+                r.description.substring(0, 50) + (r.description.length > 50 ? '...' : ''),
+                r.hadImpact ? 'SIM' : 'NÃO'
+            ]),
+            startY: 20,
+        });
+        doc.save('observacoes_producao.pdf');
+    };
+
+    // ============================================================================
+    // RENDER: OBSERVAÇÕES
+    // ============================================================================
+    const renderObservations = () => (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 no-print">
+                <div className="flex items-center gap-2">
+                    <button onClick={handleExportObservationsXLSX} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-green-600 dark:border-green-700 text-green-700 dark:text-green-400 px-4 py-2 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 transition text-sm font-medium">
+                        <File size={16} /> Exportar XLSX
+                    </button>
+                    <button onClick={handleExportObservationsPDF} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-red-600 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition text-sm font-medium">
+                        <File size={16} /> Exportar PDF
+                    </button>
+                </div>
+                {canCreate() && (
+                    <button onClick={() => handleOpenObservationModal()} className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-semibold">
+                        <Plus size={20} className="mr-2" />
+                        Nova Observação
+                    </button>
+                )}
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Data</label>
+                        <DatePickerInput
+                            value={observationFilters.date}
+                            type="month"
+                            onChange={(date) => setObservationFilters({ ...observationFilters, date })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Setor</label>
+                        <select
+                            value={observationFilters.sector}
+                            onChange={(e) => setObservationFilters({ ...observationFilters, sector: e.target.value })}
+                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        >
+                            <option value="Todos">TODOS</option>
+                            {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Produto</label>
+                        <input
+                            type="text"
+                            placeholder="Buscar produto..."
+                            value={observationFilters.product}
+                            onChange={(e) => setObservationFilters({ ...observationFilters, product: e.target.value })}
+                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Tipo de Observação</label>
+                        <input
+                            type="text"
+                            placeholder="Buscar tipo..."
+                            value={observationFilters.observationType}
+                            onChange={(e) => setObservationFilters({ ...observationFilters, observationType: e.target.value })}
+                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
+                <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><FileText size={20} />Observações de Produção</h3>
+                <div className="overflow-x-auto w-full">
+                    <div className="min-w-[800px]">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50/50 dark:bg-slate-700/50">
+                                <tr>
+                                    <th className="px-6 py-3">Data</th>
+                                    <th className="px-6 py-3">Setor</th>
+                                    <th className="px-6 py-3">Produto</th>
+                                    <th className="px-6 py-3">Tipo de Observação</th>
+                                    <th className="px-6 py-3">Descrição</th>
+                                    <th className="px-6 py-3 text-center">Houve Impacto?</th>
+                                    <th className="px-6 py-3 text-center no-print">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-gray-600 dark:text-gray-300">
+                                {filteredObservations.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="text-center py-10 text-gray-400">Nenhuma observação encontrada</td>
+                                    </tr>
+                                ) : filteredObservations.map(rec => (
+                                    <tr key={rec.id} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                                        <td className="px-6 py-4">{new Date(rec.date).toLocaleDateString('pt-BR')}</td>
+                                        <td className="px-6 py-4">{(Sector[rec.sector as keyof typeof Sector] || rec.sector).toUpperCase()}</td>
+                                        <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-100">{rec.product.toUpperCase()}</td>
+                                        <td className="px-6 py-4">{rec.observationType.toUpperCase()}</td>
+                                        <td className="px-6 py-4 max-w-xs truncate" title={rec.description}>{rec.description}</td>
+                                        <td className="px-6 py-4 text-center font-semibold">{rec.hadImpact ? 'SIM' : 'NÃO'}</td>
+                                        <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                                            <button type="button" onClick={() => handleViewObservation(rec)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                                <Eye size={18} />
+                                            </button>
+                                            {!isEspectador() && (
+                                                <>
+                                                    {canEdit() && (
+                                                        <button type="button" onClick={() => handleOpenObservationModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                    )}
+                                                    {canDelete() && (
+                                                        <button type="button" onClick={() => handleDeleteObservationClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
     const renderOverview = () => (
         <div className="space-y-6">
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
@@ -742,7 +1153,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                                     <th className="px-6 py-3 text-center">Realizado</th>
                                     <th className="px-6 py-3 text-center">QTD. EM KG/UND</th>
                                     <th className="px-6 py-3 text-center">Velocidade %</th>
-                                    {!isEspectador() && <th className="px-6 py-3 text-center no-print">Ações</th>}
+                                    <th className="px-6 py-3 text-center no-print">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="text-gray-600 dark:text-gray-300">
@@ -784,16 +1195,21 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                                             })() : '-'}
                                         </td>
                                         <td className="px-6 py-4 font-semibold text-center">{rec.velocidade.toFixed(1)}%</td>
-                                        {!isEspectador() && (
-                                            <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                                                {canEdit() && (
-                                                    <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                                                )}
-                                                {canDelete() && (
-                                                    <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                                                )}
-                                            </td>
-                                        )}
+                                        <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                                            <button type="button" onClick={() => handleViewRecord(rec)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                                <Eye size={18} />
+                                            </button>
+                                            {!isEspectador() && (
+                                                <>
+                                                    {canEdit() && (
+                                                        <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                    )}
+                                                    {canDelete() && (
+                                                        <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -811,7 +1227,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 <p className="text-md text-imac-text/70 dark:text-slate-400">Analise o desempenho da produção em relação às metas</p>
             </div>
 
-            <div className="bg-gray-100 dark:bg-slate-800 p-1 rounded-lg flex space-x-1 max-w-sm no-print transition-colors">
+            <div className="bg-gray-100 dark:bg-slate-800 p-1 rounded-lg flex space-x-1 max-w-xl no-print transition-colors">
                 <button
                     onClick={() => setActiveTab('overview')}
                     className={`w-full flex justify-center items-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'overview' ? 'bg-white dark:bg-slate-600 text-imac-tertiary dark:text-white shadow' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
@@ -828,10 +1244,18 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                     <List size={16} className="mr-2" />
                     Dados Registrados
                 </button>
+                <button
+                    onClick={() => setActiveTab('observations')}
+                    className={`w-full flex justify-center items-center py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'observations' ? 'bg-white dark:bg-slate-600 text-imac-tertiary dark:text-white shadow' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
+                        }`}
+                >
+                    <FileText size={16} className="mr-2" />
+                    Observações
+                </button>
             </div>
 
             <div className="mt-6">
-                {activeTab === 'overview' ? renderOverview() : renderRecords()}
+                {activeTab === 'overview' ? renderOverview() : activeTab === 'records' ? renderRecords() : renderObservations()}
             </div>
 
             <Modal
@@ -842,12 +1266,36 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 <ProductionRecordForm record={currentRecord} onSave={handleSave} onCancel={handleCloseModal} products={products} />
             </Modal>
 
+            <Modal
+                isOpen={isObservationModalOpen}
+                onClose={handleCloseObservationModal}
+                title={currentObservation ? 'Editar Observação' : 'Nova Observação'}
+            >
+                <ObservationRecordForm record={currentObservation} onSave={handleSaveObservation} onCancel={handleCloseObservationModal} products={products} />
+            </Modal>
+
             <ConfirmModal
                 isOpen={!!deleteId}
                 onClose={() => setDeleteId(null)}
                 onConfirm={confirmDelete}
                 title="Excluir Registro"
                 message="Tem certeza que deseja excluir este registro de produção? Esta ação não pode ser desfeita."
+            />
+
+            <ConfirmModal
+                isOpen={!!deleteObservationId}
+                onClose={() => setDeleteObservationId(null)}
+                onConfirm={confirmDeleteObservation}
+                title="Excluir Observação"
+                message="Tem certeza que deseja excluir esta observação? Esta ação não pode ser desfeita."
+            />
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title={viewTitle}
+                data={viewData}
+                fields={viewFields}
             />
 
         </div>

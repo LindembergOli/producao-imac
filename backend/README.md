@@ -155,6 +155,14 @@ npm start
 - `PUT /api/absenteeism/:id` - Atualizar
 - `DELETE /api/absenteeism/:id` - Deletar
 
+### Production Observations (Observações de Produção)
+
+- `GET /api/production-observations` - Listar observações
+- `GET /api/production-observations/:id` - Buscar por ID
+- `POST /api/production-observations` - Criar
+- `PUT /api/production-observations/:id` - Atualizar
+- `DELETE /api/production-observations/:id` - Deletar
+
 ## 🔐 Segurança
 
 - **Helmet** - Headers de segurança

@@ -8,6 +8,13 @@ import { AppError } from '../../middlewares/errorHandler.js';
 import logger from '../../utils/logger.js';
 import { paginate, createPaginatedResponse } from '../../utils/pagination.js';
 
+/**
+ * Lista todos os registros com paginação.
+ * 
+ * @param {number} [page=1] - Página atual.
+ * @param {number} [limit=20] - Limite por página.
+ * @returns {Promise<Object>} Dados paginados com unidade do produto preenchida.
+ */
 export const getAll = async (page = 1, limit = 20) => {
     const { skip, take } = paginate(page, limit);
 
@@ -45,6 +52,13 @@ export const getAll = async (page = 1, limit = 20) => {
     return createPaginatedResponse(dataWithUnit, page, limit, total);
 };
 
+/**
+ * Busca registro por ID.
+ * 
+ * @param {string|number} id - ID do registro.
+ * @returns {Promise<Object>} Registro encontrado.
+ * @throws {AppError} 404 se não encontrado.
+ */
 export const getById = async (id) => {
     const record = await prisma.productionSpeed.findUnique({
         where: { id: parseInt(id) },
@@ -53,6 +67,17 @@ export const getById = async (id) => {
     return record;
 };
 
+/**
+ * Cria novo registro de velocidade de produção.
+ * Realiza cálculo automático de totalRealizadoKgUnd baseado no rendimento do produto.
+ * 
+ * @param {Object} data - Dados do registro.
+ * @param {string} data.produto - Nome do produto.
+ * @param {string} data.sector - Setor.
+ * @param {number} data.totalRealizado - Quantidade realizada.
+ * @returns {Promise<Object>} Registro criado.
+ * @throws {AppError} 404 se produto não encontrado, 400 se produto sem rendimento.
+ */
 export const create = async (data) => {
     // Buscar produto para obter rendimento (yield)
     const product = await prisma.product.findFirst({
@@ -86,6 +111,14 @@ export const create = async (data) => {
     return record;
 };
 
+/**
+ * Atualiza registro existente.
+ * Recalcula totalRealizadoKgUnd.
+ * 
+ * @param {string|number} id - ID.
+ * @param {Object} data - Dados a atualizar.
+ * @returns {Promise<Object>} Registro atualizado.
+ */
 export const update = async (id, data) => {
     await getById(id);
 
@@ -122,6 +155,11 @@ export const update = async (id, data) => {
     return record;
 };
 
+/**
+ * Remove registro (soft delete).
+ * 
+ * @param {string|number} id - ID.
+ */
 export const remove = async (id) => {
     await getById(id);
     await prisma.productionSpeed.update({

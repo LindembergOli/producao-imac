@@ -1,14 +1,16 @@
 
 import React, { useState, useMemo } from 'react';
 import { sanitizeFormInput } from '../utils/sanitize';
-import { Plus, Package, Pencil, Trash2, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Package, Pencil, Trash2, FileSpreadsheet, FileText, Eye } from 'lucide-react';
 import type { Supply } from '../types';
 import { Sector, Unit } from '../types';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Modal, { ConfirmModal } from '../components/Modal';
+import ViewModal from '../components/ViewModal';
 import { suppliesService } from '../services/modules/supplies';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SuppliesProps {
     supplies: Supply[];
@@ -167,6 +169,12 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
     const [currentSupply, setCurrentSupply] = useState<Supply | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<Supply | null>(null);
+
+    const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
+
     // Estado dos filtros
     const [filters, setFilters] = useState({
         sector: '',
@@ -298,13 +306,15 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
                     <button onClick={handleExportPDF} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-red-600 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition text-sm font-medium">
                         <FileText size={16} /> Exportar PDF
                     </button>
-                    <button
-                        onClick={() => handleOpenModal()}
-                        className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors shadow-sm font-semibold"
-                    >
-                        <Plus size={20} className="mr-2" />
-                        Novo Insumo
-                    </button>
+                    {canCreate() && (
+                        <button
+                            onClick={() => handleOpenModal()}
+                            className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors shadow-sm font-semibold"
+                        >
+                            <Plus size={20} className="mr-2" />
+                            Novo Insumo
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -365,7 +375,7 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
                             <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
                             <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Unidade</div>
                             <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Custo por KG</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-right no-print">Ações</div>
+                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
                         </div>
                         {/* Body */}
                         <div className="mt-2">
@@ -385,13 +395,24 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
                                         <div className="col-span-2 text-gray-600 dark:text-gray-400">
                                             {supply.unitCost ? supply.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
                                         </div>
-                                        <div className="col-span-1 flex justify-end items-center gap-2 no-print">
-                                            <button type="button" onClick={() => handleOpenModal(supply)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${supply.name}`}>
-                                                <Pencil size={18} />
+                                        <div className="col-span-1 flex justify-center items-center gap-2 no-print">
+                                            <button type="button" onClick={() => { setViewData(supply); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                                <Eye size={18} />
                                             </button>
-                                            <button type="button" onClick={() => handleDeleteClick(supply.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${supply.name}`}>
-                                                <Trash2 size={18} />
-                                            </button>
+                                            {!isEspectador() && (
+                                                <>
+                                                    {canEdit() && (
+                                                        <button type="button" onClick={() => handleOpenModal(supply)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${supply.name}`}>
+                                                            <Pencil size={18} />
+                                                        </button>
+                                                    )}
+                                                    {canDelete() && (
+                                                        <button type="button" onClick={() => handleDeleteClick(supply.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${supply.name}`}>
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ))
@@ -412,6 +433,20 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
                     onCancel={handleCloseModal}
                 />
             </Modal>
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes do Insumo"
+                data={viewData}
+                fields={[
+                    { label: 'Setor', key: 'sector' },
+                    { label: 'Nome', key: 'name' },
+                    { label: 'Unidade', key: 'unit' },
+                    { label: 'Custo por KG', key: 'unitCost', format: (v: number) => v ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-' },
+                    { label: 'Observações', key: 'notes' }
+                ]}
+            />
 
             <ConfirmModal
                 isOpen={!!deleteId}

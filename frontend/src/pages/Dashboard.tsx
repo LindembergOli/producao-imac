@@ -225,14 +225,20 @@ const Dashboard: React.FC<DashboardProps> = ({
 
     const sortedKeys = Object.keys(monthlyData).sort();
 
-    return sortedKeys.map(key => {
+    const allData = sortedKeys.map(key => {
       const [y, m] = key.split('-');
       return {
         name: `${m}/${y}`,
         'Custo Total (R$)': monthlyData[key]
       };
     });
-  }, [filteredLoss, filteredError]);
+
+    // Limitar aos últimos 6 meses apenas se não houver filtros aplicados
+    if (!dateRange.start && !dateRange.end && allData.length > 6) {
+      return allData.slice(-6);
+    }
+    return allData;
+  }, [filteredLoss, filteredError, dateRange]);
 
   const chartData = useMemo(() => {
     const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
@@ -305,17 +311,22 @@ const Dashboard: React.FC<DashboardProps> = ({
   const maintenanceData = useMemo(() => {
     const stopsBySectorData = filteredMaintenance.reduce((acc, rec) => {
       const normalizedSector = normalizeSector(rec.sector);
-      if (!acc[normalizedSector]) acc[normalizedSector] = 0;
-      acc[normalizedSector] += 1;
+      if (!acc[normalizedSector]) {
+        acc[normalizedSector] = { count: 0, hours: 0 };
+      }
+      acc[normalizedSector].count += 1;
+      acc[normalizedSector].hours += Number(rec.durationHours) || 0;
       return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, { count: number; hours: number }>);
 
     const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
     return sectors.map(sector => {
       const normalizedSector = normalizeSector(sector);
+      const data = stopsBySectorData[normalizedSector] || { count: 0, hours: 0 };
       return {
         name: sector,
-        'Ordens de Manutenção': stopsBySectorData[normalizedSector] || 0,
+        'Ordens de Manutenção': data.count,
+        'Horas Paradas': data.hours,
       };
     });
   }, [filteredMaintenance]);
@@ -459,7 +470,14 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartContainer title="Custo Total (R$)">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={costEvolutionData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+            <ComposedChart data={costEvolutionData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+              <defs>
+                <linearGradient id="costGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#EF4444" stopOpacity={0.6} />
+                  <stop offset="50%" stopColor="#EF4444" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#EF4444" stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis dataKey="name" {...xAxisProps} />
               <YAxis tick={{ fill: tickColor, fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(val) => `R$${val}`} />
@@ -468,10 +486,20 @@ const Dashboard: React.FC<DashboardProps> = ({
                 formatter={(value) => [`R$ ${Number(value).toFixed(2)}`, 'Custo Total']}
               />
               <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
-              <Line type="natural" dataKey="Custo Total (R$)" stroke="#EF4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }}>
+              <Area
+                type="natural"
+                dataKey="Custo Total (R$)"
+                stroke="none"
+                fill="url(#costGradient)"
+                fillOpacity={1}
+                legendType="none"
+                name=""
+                tooltipType="none"
+              />
+              <Line type="natural" dataKey="Custo Total (R$)" stroke="#EF4444" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#fff', stroke: '#EF4444', strokeWidth: 2 }}>
                 <LabelList dataKey="Custo Total (R$)" position="top" formatter={(v) => `R$${formatChartNumber(Number(v))}`} style={{ fill: '#EF4444', fontSize: 16, fontWeight: 600 }} />
               </Line>
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </ChartContainer>
         <ChartContainer title="Velocidade de Produção por Setor">
@@ -581,7 +609,31 @@ const Dashboard: React.FC<DashboardProps> = ({
                   allowDecimals={false}
                   domain={[0, 'auto']}
                 />
-                <Tooltip contentStyle={tooltipStyle} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      const hours = Math.floor(Number(data['Horas Paradas']));
+                      const minutes = Math.round((Number(data['Horas Paradas']) - hours) * 60);
+                      return (
+                        <div style={{
+                          ...tooltipStyle,
+                          padding: '12px',
+                          border: `1px solid ${tooltipStyle.borderColor}`
+                        }}>
+                          <p style={{ fontWeight: 600, marginBottom: '8px' }}>{data.name}</p>
+                          <p style={{ fontSize: '14px', marginBottom: '4px' }}>
+                            Ordens de Manutenção: <strong>{data['Ordens de Manutenção']}</strong>
+                          </p>
+                          <p style={{ fontSize: '14px', color: COLORS.tertiary }}>
+                            Horas Paradas: <strong>{hours}:{String(minutes).padStart(2, '0')}h</strong>
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
                 <Legend wrapperStyle={{ fontSize: "14px", paddingTop: "10px" }} iconType="circle" />
                 <Bar dataKey="Ordens de Manutenção" fill={COLORS.tertiary} barSize={45} radius={[4, 4, 0, 0]}>
                   <LabelList dataKey="Ordens de Manutenção" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#B36B3C', fontSize: 16, fontWeight: 600 }} />

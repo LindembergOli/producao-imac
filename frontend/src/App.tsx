@@ -14,7 +14,7 @@ import Products from './pages/Products';
 import Supplies from './pages/Supplies';
 import Machines from './pages/Machines';
 import Users from './pages/Users';
-import type { Page, Employee, Product, Supply, Machine, ProductionSpeedRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord } from './types';
+import type { Page, Employee, Product, Supply, Machine, ProductionSpeedRecord, ProductionObservationRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord } from './types';
 
 // Services
 import { employeesService } from './services/modules/employees';
@@ -26,6 +26,7 @@ import { lossesService } from './services/modules/losses';
 import { errorsService } from './services/modules/errors';
 import { maintenanceService } from './services/modules/maintenance';
 import { absenteeismService } from './services/modules/absenteeism';
+import { productionObservationsService } from './services/modules/productionObservations';
 
 const App: React.FC = () => {
   const { isAuthenticated, loading: authLoading, isAdmin } = useAuth();
@@ -65,6 +66,7 @@ const App: React.FC = () => {
   const [errorRecords, setErrorRecords] = useState<ErrorRecord[]>([]);
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
   const [absenteeismRecords, setAbsenteeismRecords] = useState<AbsenteeismRecord[]>([]);
+  const [observationRecords, setObservationRecords] = useState<ProductionObservationRecord[]>([]);
 
   // Resetar para Dashboard quando fizer logout
   useEffect(() => {
@@ -84,7 +86,7 @@ const App: React.FC = () => {
     try {
       setDataLoading(true);
       const [
-        emps, prods, supps, machs, speeds, losses, errors, maint, absent
+        emps, prods, supps, machs, speeds, losses, errors, maint, absent, observations
       ] = await Promise.all([
         employeesService.getAll(),
         productsService.getAll(),
@@ -94,7 +96,8 @@ const App: React.FC = () => {
         lossesService.getAll(),
         errorsService.getAll(),
         maintenanceService.getAll(),
-        absenteeismService.getAll()
+        absenteeismService.getAll(),
+        productionObservationsService.getAll()
       ]);
 
 
@@ -107,6 +110,7 @@ const App: React.FC = () => {
       setErrorRecords(errors);
       setMaintenanceRecords(maint);
       setAbsenteeismRecords(absent);
+      setObservationRecords(observations);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       // Não alertamos erro fatal aqui para não bloquear o usuário, 
@@ -152,7 +156,14 @@ const App: React.FC = () => {
           isDarkMode={isDarkMode}
         />;
       case 'Velocidade':
-        return <ProductionSpeed products={products} records={speedRecords} setRecords={setSpeedRecords} isDarkMode={isDarkMode} />;
+        return <ProductionSpeed
+          products={products}
+          records={speedRecords}
+          setRecords={setSpeedRecords}
+          observationRecords={observationRecords}
+          setObservationRecords={setObservationRecords}
+          isDarkMode={isDarkMode}
+        />;
       case 'Perdas':
         return <Losses products={products} records={lossRecords} setRecords={setLossRecords} isDarkMode={isDarkMode} />;
       case 'Erros':

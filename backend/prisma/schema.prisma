@@ -74,6 +74,11 @@ model User {
   employeesUpdated Employee[] @relation("EmployeeUpdatedBy")
   employeesDeleted Employee[] @relation("EmployeeDeletedBy")
 
+  // Relações de auditoria - ProductionObservation
+  productionObservationsCreated ProductionObservation[] @relation("ProductionObservationCreatedBy")
+  productionObservationsUpdated ProductionObservation[] @relation("ProductionObservationUpdatedBy")
+  productionObservationsDeleted ProductionObservation[] @relation("ProductionObservationDeletedBy")
+
   @@map("users")
 }
 
@@ -258,6 +263,44 @@ model ProductionSpeed {
   @@index([mesAno, sector, deletedAt]) // Filtro combinado comum
   
   @@map("production_speed")
+}
+
+model ProductionObservation {
+  id                Int      @id @default(autoincrement())
+  date              DateTime
+  sector            Sector
+  product           String
+  observationType   String   @map("observation_type")
+  description       String   @db.Text
+  hadImpact         Boolean  @map("had_impact")
+  
+  // Campos de auditoria temporal
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Campos de auditoria de usuário
+  createdBy         Int?
+  createdByUser     User?    @relation("ProductionObservationCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  updatedBy         Int?
+  updatedByUser     User?    @relation("ProductionObservationUpdatedBy", fields: [updatedBy], references: [id], onDelete: SetNull)
+  
+  // Soft delete
+  deletedAt         DateTime?
+  deletedBy         Int?
+  deletedByUser     User?    @relation("ProductionObservationDeletedBy", fields: [deletedBy], references: [id], onDelete: SetNull)
+  
+  // Índices para otimização de performance
+  @@index([date])
+  @@index([sector])
+  @@index([product])
+  @@index([observationType])
+  @@index([deletedAt])
+  @@index([date, deletedAt])
+  @@index([sector, deletedAt])
+  @@index([createdBy])
+  @@index([updatedBy])
+  
+  @@map("production_observations")
 }
 
 model Loss {

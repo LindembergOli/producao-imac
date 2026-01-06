@@ -1,13 +1,26 @@
 import React from 'react';
 import { X, TriangleAlert } from 'lucide-react';
 
+/**
+ * Propriedades do Modal genérico.
+ */
 interface ModalProps {
+  /** Define se o modal está visível */
   isOpen: boolean;
+  /** Função chamada ao fechar o modal */
   onClose: () => void;
+  /** Título do modal */
   title: string;
+  /** Conteúdo interno do modal */
   children: React.ReactNode;
 }
 
+/**
+ * Componente Modal Genérico
+ * 
+ * Container flexível para exibir conteúdo sobreposto à tela.
+ * Inclui animação de entrada e backdrop escurecido.
+ */
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
 
@@ -24,7 +37,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
           {children}
         </div>
       </div>
-       <style>{`
+      <style>{`
         @keyframes scale-in {
           from {
             transform: scale(0.95);
@@ -43,14 +56,28 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
   );
 };
 
+/**
+ * Propriedades do Modal de Confirmação.
+ */
 interface ConfirmModalProps {
+  /** Define se o modal está visível */
   isOpen: boolean;
+  /** Função chamada ao cancelar */
   onClose: () => void;
+  /** Função chamada ao confirmar a ação */
   onConfirm: () => void;
+  /** Título do modal */
   title: string;
+  /** Mensagem de aviso/confirmação */
   message: string;
 }
 
+/**
+ * Modal de Confirmação
+ * 
+ * Modal específico para solicitar confirmação do usuário antes de ações destrutivas.
+ * Exibe um alerta visual e botões "Cancelar" e "Sim, Excluir".
+ */
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, onClose, onConfirm, title, message }) => {
   if (!isOpen) return null;
 
@@ -67,13 +94,13 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({ isOpen, onClose, onC
           {message}
         </p>
         <div className="flex justify-end gap-3">
-          <button 
+          <button
             onClick={onClose}
             className="px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 font-semibold transition-colors"
           >
             Cancelar
           </button>
-          <button 
+          <button
             onClick={() => { onConfirm(); onClose(); }}
             className="px-4 py-2 rounded-lg text-white bg-red-600 hover:bg-red-700 font-semibold shadow-md transition-colors"
           >

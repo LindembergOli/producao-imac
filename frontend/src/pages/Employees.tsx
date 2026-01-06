@@ -11,12 +11,22 @@ import { employeesService } from '../services/modules/employees';
 
 import { useAuth } from '../contexts/AuthContext';
 import { getVisibleSectors } from '../utils/sectorUtils';
+import ViewModal from '../components/ViewModal';
+import { Eye } from 'lucide-react';
+import { formatText } from '../utils/formatters';
 
+/**
+ * Formulário de Cadastro/Edição de Funcionários
+ * 
+ * Componente interno para gerenciar os dados do funcionário.
+ * Filtra os setores visíveis com base na permissão do usuário.
+ */
 const EmployeeForm: React.FC<{
     employee: Partial<Employee> | null;
     onSave: (employee: Omit<Employee, 'id'>) => void;
     onCancel: () => void;
 }> = ({ employee, onSave, onCancel }) => {
+    // ... corpo do componente mantido ...
     const { user } = useAuth();
     const [formData, setFormData] = useState({
         name: employee?.name || '',
@@ -99,11 +109,21 @@ interface EmployeesProps {
     setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
 }
 
+/**
+ * Página de Gerenciamento de Funcionários
+ * 
+ * Permite visualizar, criar, editar e excluir funcionários.
+ * Inclui filtragem por setor, nome e cargo.
+ */
 const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
-    const { user } = useAuth();
+    const { user, isEspectador } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<Employee | null>(null);
 
     // Estado dos filtros
     const [filters, setFilters] = useState({
@@ -112,6 +132,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
         role: ''
     });
 
+    // Filtra e ordena a lista de funcionários com base nos filtros e permissões
     const filteredAndSortedEmployees = useMemo(() => {
         if (!Array.isArray(employees)) return [];
 
@@ -152,6 +173,11 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
     const handleCloseModal = () => {
         setIsModalOpen(false);
         setCurrentEmployee(null);
+    };
+
+    const handleView = (employee: Employee) => {
+        setViewData(employee);
+        setIsViewModalOpen(true);
     };
 
     const handleSave = async (employeeData: Omit<Employee, 'id'>) => {
@@ -328,7 +354,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                             <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
                             <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
                             <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Cargo</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-right no-print">Ações</div>
+                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
                         </div>
 
                         {/* Body */}
@@ -346,13 +372,20 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                                         <div className="col-span-3 text-gray-600 dark:text-gray-300">{emp.sector}</div>
                                         <div className="col-span-4 font-medium text-gray-800 dark:text-gray-100">{emp.name}</div>
                                         <div className="col-span-2 text-gray-600 dark:text-gray-400">{emp.role || '-'}</div>
-                                        <div className="col-span-1 flex justify-end items-center gap-2 no-print">
-                                            <button type="button" onClick={() => handleOpenModal(emp)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label="Editar">
-                                                <Pencil size={18} />
+                                        <div className="col-span-1 flex justify-center items-center gap-2 no-print">
+                                            <button type="button" onClick={() => handleView(emp)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" aria-label="Visualizar" title="Visualizar">
+                                                <Eye size={18} />
                                             </button>
-                                            <button type="button" onClick={() => handleDeleteClick(emp.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label="Excluir">
-                                                <Trash2 size={18} />
-                                            </button>
+                                            {!isEspectador() && (
+                                                <>
+                                                    <button type="button" onClick={() => handleOpenModal(emp)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label="Editar" title="Editar">
+                                                        <Pencil size={18} />
+                                                    </button>
+                                                    <button type="button" onClick={() => handleDeleteClick(emp.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label="Excluir" title="Excluir">
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 ))
@@ -380,6 +413,18 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                 onConfirm={confirmDelete}
                 title="Excluir Funcionário"
                 message="Tem certeza que deseja excluir este funcionário? Esta ação não pode ser desfeita."
+            />
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes do Funcionário"
+                data={viewData}
+                fields={[
+                    { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+                    { label: 'Nome', key: 'name' },
+                    { label: 'Cargo', key: 'role' }
+                ]}
             />
         </div>
     );

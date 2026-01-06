@@ -7,12 +7,13 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { ComposedChart, Bar, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
-import { TrendingUp, List, Plus, File, Users, Activity, TriangleAlert, Pencil, Trash2, Filter } from 'lucide-react';
+import { ComposedChart, Bar, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Area } from 'recharts';
+import { TrendingUp, List, Plus, File, Users, Activity, TriangleAlert, Pencil, Trash2, Filter, Eye } from 'lucide-react';
 import Modal, { ConfirmModal } from '../components/Modal';
+import ViewModal from '../components/ViewModal';
 import { useAuth } from '../contexts/AuthContext';
 import { absenteeismService } from '../services/modules/absenteeism';
-import { formatBrazilianNumber } from '../utils/formatters';
+import { formatBrazilianNumber, formatText } from '../utils/formatters';
 import DatePickerInput from '../components/DatePickerInput';
 import AutocompleteInput from '../components/AutocompleteInput';
 
@@ -29,7 +30,11 @@ const COLORS = {
   pie: ['#2ECC71', '#E74C3C', '#F3C78A', '#60A5FA', '#A78BFA']
 };
 
-// Função para determinar status da taxa de absenteísmo
+/**
+ * Determina o status da taxa de absenteísmo (cor e rótulo)
+ * @param rate - Taxa de absenteísmo (%)
+ * @returns Objeto com metadados de exibição (cor, rótulo, descrição)
+ */
 const getAbsenteeismRateStatus = (rate: number): { color: string; label: string; description: string } => {
   if (rate < 3) {
     return {
@@ -54,7 +59,12 @@ const getAbsenteeismRateStatus = (rate: number): { color: string; label: string;
 
 // getMesAnoOptions removido pois agora usamos DatePickerInput com type="month"
 
-// Cálculo matemático de dias úteis (Seg-Sex) para evitar loops infinitos
+/**
+ * Calcula o número de dias úteis (Seg-Sex) entre duas datas.
+ * @param startDate - Data de início
+ * @param endDate - Data final
+ * @returns Número de dias úteis
+ */
 const countBusinessDays = (startDate: Date, endDate: Date) => {
   if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return 0;
   if (endDate < startDate) return 0;
@@ -95,12 +105,16 @@ const formatDateSafe = (dateString: string) => {
 };
 
 
+/**
+ * Formulário para Criar/Editar Registro de Absenteísmo
+ */
 const AbsenteeismRecordForm: React.FC<{
   record: Partial<AbsenteeismRecord> | null;
   onSave: (record: Omit<AbsenteeismRecord, 'id'>) => void;
   onCancel: () => void;
   employees: Employee[];
 }> = ({ record, onSave, onCancel, employees }) => {
+  // ... implementação do formulário
   // Função auxiliar para converter data para formato YYYY-MM-DD
   const formatDateForInput = (date: string | Date | undefined): string => {
     if (!date) return new Date().toISOString().split('T')[0] || '';
@@ -196,11 +210,24 @@ interface AbsenteeismProps {
   isDarkMode: boolean;
 }
 
+/**
+ * Página Principal de Absenteísmo
+ * 
+ * Exibe dashboard com KPIs, gráficos de absenteísmo por setor e evolução mensal,
+ * além da tabela de registros diários.
+ */
 const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecords, isDarkMode }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<AbsenteeismRecord | null>(null);
+
+
+
   const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  // Estados para visualização
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewData, setViewData] = useState<AbsenteeismRecord | null>(null);
 
   const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
@@ -473,6 +500,76 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
     return data.filter(d => d.value > 0);
   }, [filteredOverviewRecords]);
 
+  const chartDataByMonth = useMemo(() => {
+    if (!filteredOverviewRecords || filteredOverviewRecords.length === 0) return [];
+
+    // Agrupar registros por mês
+    const monthlyData: Record<string, { records: AbsenteeismRecord[], monthYear: string }> = {};
+
+    filteredOverviewRecords.forEach(record => {
+      const cleanDate = record.date.split('T')[0] || record.date;
+      const [year, month] = cleanDate.split('-').map(Number);
+
+      if (!year || !month) return;
+
+      const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+      const monthYear = `${String(month).padStart(2, '0')}/${year}`;
+
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = { records: [], monthYear };
+      }
+      monthlyData[monthKey].records.push(record);
+    });
+
+    // Calcular taxa de absenteísmo para cada mês
+    const monthlyRates = Object.entries(monthlyData).map(([monthKey, data]) => {
+      const [year, month] = monthKey.split('-').map(Number);
+
+      if (!year || month === undefined) return null;
+
+      // Calcular dias úteis do mês
+      const firstDay = new Date(year, month - 1, 1);
+      const lastDay = new Date(year, month, 0);
+      const businessDays = countBusinessDays(firstDay, lastDay);
+
+      // Calcular dias perdidos no mês
+      const totalDaysLost = data.records.reduce((sum, r) => {
+        const absenceStart = new Date(r.date);
+        const absenceEnd = new Date(absenceStart);
+        absenceEnd.setDate(absenceEnd.getDate() + (Number(r.daysAbsent) || 1) - 1);
+
+        const effectiveStart = absenceStart > firstDay ? absenceStart : firstDay;
+        const effectiveEnd = absenceEnd < lastDay ? absenceEnd : lastDay;
+
+        if (effectiveStart <= effectiveEnd) {
+          return sum + countBusinessDays(effectiveStart, effectiveEnd);
+        }
+        return sum;
+      }, 0);
+
+      const totalEmployees = employees?.length || 0;
+      const totalPossibleDays = totalEmployees * (businessDays || 1);
+      const taxaAbsenteismo = (totalPossibleDays > 0) ? (totalDaysLost / totalPossibleDays) * 100 : 0;
+
+      return {
+        name: data.monthYear,
+        'Taxa %': taxaAbsenteismo,
+        monthKey
+      };
+    });
+
+    // Filtrar valores null e ordenar por mês
+    const validMonthlyRates = monthlyRates.filter(item => item !== null) as { name: string; 'Taxa %': number; monthKey: string }[];
+    const sortedRates = validMonthlyRates.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+    // Se não houver filtros aplicados, limitar aos últimos 12 meses
+    if (!overviewFilters.start && !overviewFilters.end && sortedRates.length > 12) {
+      return sortedRates.slice(-12);
+    }
+
+    return sortedRates;
+  }, [filteredOverviewRecords, employees, overviewFilters]);
+
   const handleOpenModal = (record?: AbsenteeismRecord) => {
     setCurrentRecord(record || null);
     setIsModalOpen(true);
@@ -648,6 +745,72 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
         />
       </div>
 
+      <ChartContainer title="Taxa de Absenteísmo Mensal">
+        {chartDataByMonth.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartDataByMonth} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
+              <defs>
+                <linearGradient id="monthlyAbsenteeismGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={COLORS.primary} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={COLORS.primary} stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={gridColor} />
+              <XAxis
+                dataKey="name"
+                {...xAxisProps}
+                padding={{ left: 30, right: 30 }}
+              />
+              <YAxis
+                {...yAxisLeftProps}
+                tickFormatter={(tick) => `${Number(tick).toFixed(1)}%`}
+                domain={[0, 'auto']}
+                yAxisId="left"
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                itemStyle={tooltipItemStyle}
+                formatter={(value: any, name: any) => {
+                  if (name === 'Taxa %') return [`${(Number(value) || 0).toFixed(2)}%`, 'Taxa de Absenteísmo'];
+                  return [value, name];
+                }}
+              />
+              <Area
+                yAxisId="left"
+                type="monotone"
+                dataKey="Taxa %"
+                stroke="none"
+                fill="url(#monthlyAbsenteeismGradient)"
+                fillOpacity={1}
+                isAnimationActive={false}
+                legendType="none"
+                name=""
+                tooltipType="none"
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="Taxa %"
+                stroke={COLORS.primary}
+                strokeWidth={3}
+                name="Taxa %"
+                dot={false}
+                activeDot={{ r: 6, fill: '#fff', stroke: COLORS.primary, strokeWidth: 2 }}
+                isAnimationActive={false}
+              >
+                <LabelList dataKey="Taxa %" position="top" formatter={(v) => `${formatChartNumber(Number(v))}%`} style={{ fill: COLORS.primary, fontSize: 16, fontWeight: 600 }} />
+              </Line>
+              <Legend wrapperStyle={legendStyle} iconType="circle" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
+            <Activity size={24} className="mb-2 opacity-50" />
+            <p className="text-sm">Nenhum dado disponível para o período</p>
+          </div>
+        )}
+      </ChartContainer>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartContainer title="Ausências por Setor">
           {filteredOverviewRecords.length > 0 ? (
@@ -672,7 +835,7 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
                 <Bar yAxisId="left" dataKey="Funcionários" fill={COLORS.success} barSize={45} name="Funcionários" radius={barRadius}>
                   <LabelList dataKey="Funcionários" position="top" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#10B981', fontSize: 16, fontWeight: 600 }} />
                 </Bar>
-                <Line yAxisId="right" type="monotone" dataKey="Taxa %" stroke={COLORS.primary} strokeWidth={3} name="Taxa %" dot={false} />
+                <Bar yAxisId="right" dataKey="Taxa %" fill="transparent" barSize={0} name="Taxa %" />
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
@@ -792,7 +955,8 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
                 <th className="px-6 py-3">Funcionário</th>
                 <th className="px-6 py-3 text-center">Dias Ausentes</th>
                 <th className="px-6 py-3">Tipo de Ausência</th>
-                {!isEspectador() && <th className="px-6 py-3 text-center no-print">Ações</th>}
+
+                <th className="px-6 py-3 text-center no-print">Ações</th>
               </tr>
             </thead>
             <tbody className="text-gray-600 dark:text-gray-300">
@@ -814,16 +978,21 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
                       {rec.absenceType.toUpperCase()}
                     </span>
                   </td>
-                  {!isEspectador() && (
-                    <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                      {canEdit() && (
-                        <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                      )}
-                      {canDelete() && (
-                        <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                      )}
-                    </td>
-                  )}
+                  <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                    <button type="button" onClick={() => { setViewData(rec); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                      <Eye size={18} />
+                    </button>
+                    {!isEspectador() && (
+                      <>
+                        {canEdit() && (
+                          <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                        )}
+                        {canDelete() && (
+                          <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                        )}
+                      </>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -870,6 +1039,20 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
       >
         <AbsenteeismRecordForm record={currentRecord} onSave={handleSave} onCancel={handleCloseModal} employees={employees} />
       </Modal>
+
+      <ViewModal
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+        title="Detalhes da Ausência"
+        data={viewData}
+        fields={[
+          { label: 'Dia da Falta', key: 'date', format: (v: string) => new Date(v).toLocaleDateString('pt-BR') },
+          { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+          { label: 'Funcionário', key: 'employeeName' },
+          { label: 'Dias Ausentes', key: 'daysAbsent' },
+          { label: 'Tipo de Ausência', key: 'absenceType', format: (v: string) => formatText(v) }
+        ]}
+      />
 
       <ConfirmModal
         isOpen={!!deleteId}

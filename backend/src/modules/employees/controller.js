@@ -18,7 +18,12 @@ import { logAudit } from '../../middlewares/audit.js';
 
 /**
  * GET /api/employees
- * Lista todos os funcionários
+ * Lista todos os funcionários.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {Object} res - Objeto de resposta.
+ * @param {Function} next - Middleware de erro.
+ * @returns {Object} Lista de funcionários.
  */
 export const getAll = async (req, res, next) => {
     try {
@@ -31,7 +36,11 @@ export const getAll = async (req, res, next) => {
 
 /**
  * GET /api/employees/:id
- * Busca funcionário por ID
+ * Busca funcionário por ID.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {string} req.params.id - ID.
+ * @returns {Object} Funcionário encontrado.
  */
 export const getById = async (req, res, next) => {
     try {
@@ -44,7 +53,11 @@ export const getById = async (req, res, next) => {
 
 /**
  * GET /api/employees/sector/:sector
- * Busca funcionários por setor
+ * Busca funcionários por setor.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {string} req.params.sector - Setor.
+ * @returns {Object} Lista de funcionários.
  */
 export const getBySector = async (req, res, next) => {
     try {
@@ -57,7 +70,9 @@ export const getBySector = async (req, res, next) => {
 
 /**
  * GET /api/employees/stats
- * Retorna estatísticas de funcionários
+ * Retorna estatísticas de funcionários.
+ * 
+ * @returns {Object} Estatísticas.
  */
 export const getStats = async (req, res, next) => {
     try {
@@ -70,7 +85,11 @@ export const getStats = async (req, res, next) => {
 
 /**
  * POST /api/employees
- * Cria um novo funcionário
+ * Cria um novo funcionário.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {Object} req.body - Dados do funcionário.
+ * @returns {Object} Funcionário criado.
  */
 export const create = async (req, res, next) => {
     try {
@@ -99,7 +118,12 @@ export const create = async (req, res, next) => {
 
 /**
  * PUT /api/employees/:id
- * Atualiza dados de um funcionário
+ * Atualiza dados de um funcionário.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {string} req.params.id - ID.
+ * @param {Object} req.body - Dados a atualizar.
+ * @returns {Object} Funcionário atualizado.
  */
 export const update = async (req, res, next) => {
     try {
@@ -127,7 +151,11 @@ export const update = async (req, res, next) => {
 
 /**
  * DELETE /api/employees/:id
- * Deleta um funcionário
+ * Deleta um funcionário.
+ * 
+ * @param {Object} req - Objeto de requisição.
+ * @param {string} req.params.id - ID.
+ * @returns {Object} Confirmação de deleção.
  */
 export const remove = async (req, res, next) => {
     try {

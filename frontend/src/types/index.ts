@@ -178,6 +178,33 @@ export interface ProductionSpeedRecord {
 }
 
 /**
+ * Registro de observação de produção
+ * 
+ * Documenta observações sobre a produção com tipo,
+ * descrição e indicação de impacto na produção.
+ * 
+ * @example
+ * {
+ *   id: 1,
+ *   date: "2025-01-06",
+ *   sector: Sector.CONFEITARIA,
+ *   product: "Bolo de Chocolate",
+ *   observationType: "Qualidade",
+ *   description: "Produto apresentou textura diferente do padrão",
+ *   hadImpact: true
+ * }
+ */
+export interface ProductionObservationRecord {
+  id: number;
+  date: string;              // Formato: YYYY-MM-DD
+  sector: Sector;
+  product: string;
+  observationType: string;   // Tipo livre de observação
+  description: string;       // Descrição detalhada
+  hadImpact: boolean;        // Se houve impacto na produção
+}
+
+/**
  * Registro de perda de produção
  * 
  * Rastreia perdas de materiais (massa, embalagem, insumos)

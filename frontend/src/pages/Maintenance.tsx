@@ -1,15 +1,17 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { MaintenanceRecord, Machine, Employee } from '../types';
 import { Sector, MaintenanceStatus } from '../types';
-import { formatChartNumber } from '../utils/formatters';
+import { formatChartNumber, formatText } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Wrench, TriangleAlert, Activity, TrendingUp, List, File, Pencil, Trash2, Filter } from 'lucide-react';
+import { Plus, Wrench, TriangleAlert, Activity, TrendingUp, List, File, Pencil, Trash2, Filter, Eye } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { BarChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, LabelList, Area } from 'recharts';
+
 import Modal, { ConfirmModal } from '../components/Modal';
+import ViewModal from '../components/ViewModal';
 import DatePickerInput from '../components/DatePickerInput';
 import TimePickerInput from '../components/TimePickerInput';
 import AutocompleteInput from '../components/AutocompleteInput';
@@ -278,7 +280,12 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<MaintenanceRecord | null>(null);
+
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Estados para visualização
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewData, setViewData] = useState<MaintenanceRecord | null>(null);
 
     const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
@@ -475,27 +482,33 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
             return acc;
         }, {} as Record<string, number>);
 
-        return Object.entries(monthlyData)
+        const monthlyArray = Object.entries(monthlyData)
             .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
             .map(([key, hours]) => {
                 try {
-                    if (!key || !key.includes('-')) return { name: key, 'Horas Paradas': hours };
+                    if (!key || !key.includes('-')) return { name: key, 'Horas Paradas': hours, monthKey: key };
                     const [year, month] = key.split('-');
-                    if (!year || !month) return { name: key, 'Horas Paradas': hours };
+                    if (!year || !month) return { name: key, 'Horas Paradas': hours, monthKey: key };
 
                     const date = new Date(Number(year), Number(month) - 1, 1);
-                    if (isNaN(date.getTime())) return { name: key, 'Horas Paradas': hours };
+                    if (isNaN(date.getTime())) return { name: key, 'Horas Paradas': hours, monthKey: key };
 
-                    const monthName = date.toLocaleDateString('pt-BR', { month: 'short' });
                     return {
-                        name: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)}/${year}`,
+                        name: `${month}/${year}`,
                         'Horas Paradas': parseFloat((hours as number).toFixed(2)),
+                        monthKey: key
                     };
                 } catch (e) {
-                    return { name: key, 'Horas Paradas': hours };
+                    return { name: key, 'Horas Paradas': hours, monthKey: key };
                 }
             });
-    }, [filteredOverviewRecords]);
+
+        // Se não houver filtros aplicados, limitar aos últimos 12 meses
+        if (!overviewFilters.start && !overviewFilters.end && monthlyArray.length > 12) {
+            return monthlyArray.slice(-12);
+        }
+        return monthlyArray;
+    }, [filteredOverviewRecords, overviewFilters]);
 
     const CustomMachineTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
@@ -710,6 +723,58 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                 />
             </div>
 
+
+            <ChartContainer title="Tempo de Parada Mensal">
+                {monthlyDowntimeData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={monthlyDowntimeData} margin={chartMargin}>
+                            <defs>
+                                <linearGradient id="maintenanceGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={COLORS.tertiary} stopOpacity={0.6} />
+                                    <stop offset="50%" stopColor={COLORS.tertiary} stopOpacity={0.3} />
+                                    <stop offset="100%" stopColor={COLORS.tertiary} stopOpacity={0.05} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                            <XAxis
+                                dataKey="name"
+                                {...xAxisProps}
+                            />
+                            <YAxis {...yAxisProps} />
+                            <Tooltip
+                                contentStyle={tooltipStyle}
+                                itemStyle={tooltipItemStyle}
+                                formatter={formatTimeTooltip}
+                            />
+                            <Area
+                                type="natural"
+                                dataKey="Horas Paradas"
+                                stroke="none"
+                                fill="url(#maintenanceGradient)"
+                                fillOpacity={1}
+                                legendType="none"
+                                tooltipType="none"
+                            />
+                            <Line
+                                type="natural"
+                                dataKey="Horas Paradas"
+                                stroke={COLORS.tertiary}
+                                strokeWidth={3}
+                                dot={false}
+                                activeDot={{ r: 6, fill: '#fff', stroke: COLORS.tertiary, strokeWidth: 2 }}
+                            >
+                                <LabelList dataKey="Horas Paradas" position="top" formatter={(v) => `${formatKpiTime(Number(v))}h`} style={{ fill: '#B36B3C', fontSize: 16, fontWeight: 600 }} />
+                            </Line>
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
+                        <Activity size={24} className="mb-2 opacity-50" />
+                        <p className="text-sm">Nenhuma ordem registrada no período</p>
+                    </div>
+                )}
+            </ChartContainer>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ChartContainer title="Paradas por Setor">
                     {filteredOverviewRecords.length > 0 && stopsBySectorData.length > 0 ? (
@@ -768,81 +833,28 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                     )}
                 </ChartContainer>
 
-                <ChartContainer title="Tempo de Parada Mensal">
-                    {monthlyDowntimeData.length > 0 ? (
+                <ChartContainer title="Máquinas com Mais Paradas">
+                    {filteredOverviewRecords.length > 0 && topMachinesData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={monthlyDowntimeData} margin={chartMargin}>
-                                <defs>
-                                    <linearGradient id="maintenanceGradient" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor={COLORS.tertiary} stopOpacity={0.6} />
-                                        <stop offset="50%" stopColor={COLORS.tertiary} stopOpacity={0.3} />
-                                        <stop offset="100%" stopColor={COLORS.tertiary} stopOpacity={0.05} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
-                                <XAxis
-                                    dataKey="name"
-                                    {...xAxisProps}
-                                />
-                                <YAxis {...yAxisProps} />
+                            <BarChart data={topMachinesData} layout="vertical" margin={chartVerticalMargin} barSize={45}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
+                                <XAxis {...verticalXAxisProps} />
+                                <YAxis {...verticalYAxisProps} />
                                 <Tooltip
-                                    contentStyle={tooltipStyle}
-                                    itemStyle={tooltipItemStyle}
-                                    formatter={formatTimeTooltip}
+                                    content={<CustomMachineTooltip />}
                                 />
-                                <Area
-                                    type="natural"
-                                    dataKey="Horas Paradas"
-                                    stroke="none"
-                                    fill="url(#maintenanceGradient)"
-                                    fillOpacity={1}
-                                    legendType="none"
-                                    tooltipType="none"
-                                />
-                                <Line
-                                    type="natural"
-                                    dataKey="Horas Paradas"
-                                    stroke={COLORS.tertiary}
-                                    strokeWidth={3}
-                                    dot={false}
-                                    activeDot={{ r: 6, fill: '#fff', stroke: COLORS.tertiary, strokeWidth: 2 }}
-                                >
-                                    <LabelList dataKey="Horas Paradas" position="top" formatter={(v) => `${formatKpiTime(Number(v))}h`} style={{ fill: '#B36B3C', fontSize: 16, fontWeight: 600 }} />
-                                </Line>
-                            </ComposedChart>
+                                <Bar dataKey="Paradas" fill={COLORS.primary} radius={barRadiusVertical}>
+                                    <LabelList dataKey="Paradas" position="right" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#D99B61', fontSize: 16, fontWeight: 600 }} />
+                                </Bar>
+                            </BarChart>
                         </ResponsiveContainer>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
                             <Activity size={24} className="mb-2 opacity-50" />
-                            <p className="text-sm">Nenhuma ordem registrada no período</p>
+                            <p className="text-sm">Nenhuma máquina com paradas no período</p>
                         </div>
                     )}
                 </ChartContainer>
-
-                <div className="lg:col-span-2">
-                    <ChartContainer title="Máquinas com Mais Paradas">
-                        {filteredOverviewRecords.length > 0 && topMachinesData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={topMachinesData} layout="vertical" margin={chartVerticalMargin} barSize={45}>
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={gridColor} />
-                                    <XAxis {...verticalXAxisProps} />
-                                    <YAxis {...verticalYAxisProps} />
-                                    <Tooltip
-                                        content={<CustomMachineTooltip />}
-                                    />
-                                    <Bar dataKey="Paradas" fill={COLORS.primary} radius={barRadiusVertical}>
-                                        <LabelList dataKey="Paradas" position="right" formatter={(v) => formatChartNumber(Number(v))} style={{ fill: '#D99B61', fontSize: 16, fontWeight: 600 }} />
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500">
-                                <Activity size={24} className="mb-2 opacity-50" />
-                                <p className="text-sm">Nenhuma máquina com paradas no período</p>
-                            </div>
-                        )}
-                    </ChartContainer>
-                </div>
             </div>
         </div>
     );
@@ -924,7 +936,8 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                                 <th className="px-6 py-3">Técnico</th>
                                 <th className="px-6 py-3">Status</th>
                                 <th className="px-6 py-3 text-right">Duração</th>
-                                {!isEspectador() && <th className="px-6 py-3 text-center no-print">Ações</th>}
+
+                                <th className="px-6 py-3 text-center no-print">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="text-gray-600 dark:text-gray-300">
@@ -945,16 +958,21 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">{formatDuration(rec.durationHours)}</td>
-                                    {!isEspectador() && (
-                                        <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                                            {canEdit() && (
-                                                <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                                            )}
-                                            {canDelete() && (
-                                                <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                                            )}
-                                        </td>
-                                    )}
+                                    <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                                        <button type="button" onClick={() => { setViewData(rec); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                            <Eye size={18} />
+                                        </button>
+                                        {!isEspectador() && (
+                                            <>
+                                                {canEdit() && (
+                                                    <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                )}
+                                                {canDelete() && (
+                                                    <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                )}
+                                            </>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -1001,6 +1019,32 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
             >
                 <MaintenanceRecordForm record={currentRecord} onSave={handleSave} onCancel={handleCloseModal} machines={machines} employees={employees} />
             </Modal>
+
+            <ConfirmModal
+                isOpen={!!deleteId}
+                onClose={() => setDeleteId(null)}
+                onConfirm={confirmDelete}
+                title="Excluir Ordem de Manutenção"
+                message="Tem certeza que deseja excluir esta ordem de manutenção? Esta ação não pode ser desfeita."
+            />
+
+            <ViewModal
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                title="Detalhes da Ordem de Manutenção"
+                data={viewData}
+                fields={[
+                    { label: 'Data', key: 'date', format: (v: string) => new Date(v).toLocaleDateString('pt-BR') },
+                    { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+                    { label: 'Máquina', key: 'machine' },
+                    { label: 'Solicitante', key: 'requester' },
+                    { label: 'Técnico', key: 'technician' },
+                    { label: 'Status', key: 'status', format: (v: string) => formatText(v) },
+                    { label: 'Duração', key: 'durationHours', format: (v: number) => formatDuration(v) },
+                    { label: 'Problema', key: 'problem' },
+                    { label: 'Solução', key: 'solution' }
+                ]}
+            />
 
             <ConfirmModal
                 isOpen={!!deleteId}
