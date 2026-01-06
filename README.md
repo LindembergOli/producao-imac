@@ -381,7 +381,6 @@ O sistema usa **Winston** para logging estruturado.
 backend/logs/
 ├── combined.log      # Todos os logs
 ├── error.log         # Apenas erros
-└── http.log          # Requisições HTTP
 ```
 
 #### Formato dos Logs
@@ -449,6 +448,7 @@ backend/src/
 │   ├── employees/
 │   ├── products/
 │   ├── machines/
+│   ├── supllies/    
 │   └── users/
 │
 └── utils/
@@ -482,6 +482,7 @@ frontend/src/
 │   ├── Employees.tsx
 │   ├── Products.tsx
 │   ├── Machines.tsx
+│   ├── Supllies.tsx
 │   ├── Users.tsx
 │   └── Login.tsx
 │
@@ -669,87 +670,3 @@ fix: corrige cálculo de velocidade
 docs: atualiza README com instruções
 refactor: reorganiza estrutura de pastas
 test: adiciona testes para auth
-```
-
----
-
-## ✅ Checklist de Produção
-
-Antes de colocar em produção, verifique:
-
-### Segurança
-- [ ] Secrets fortes e únicos gerados
-- [ ] HTTPS configurado
-- [ ] CORS restrito ao domínio correto
-- [ ] Rate limiting ativado
-- [ ] Senhas padrão alteradas
-- [ ] Variáveis de ambiente configuradas
-- [ ] Logs de segurança ativados
-
-### Banco de Dados
-- [ ] Migrações aplicadas
-- [ ] Backup automático configurado
-- [ ] Índices criados
-- [ ] Política de retenção definida
-
-### Performance
-- [ ] Cache configurado (se aplicável)
-- [ ] Compressão de respostas ativada
-- [ ] Assets minificados
-- [ ] CDN configurado (se aplicável)
-
-### Monitoramento
-- [ ] Logs estruturados ativados
-- [ ] Healthcheck funcionando
-- [ ] Alertas configurados
-- [ ] Métricas coletadas
-
-### Documentação
-- [ ] README atualizado
-- [ ] API documentada
-- [ ] Runbook de operações criado
-- [ ] Plano de disaster recovery definido
-
----
-
-## 📚 Documentação Adicional
-
-- [Arquitetura Detalhada](docs/ARQUITETURA.md)
-- [Guia do Backend](docs/BACKEND.md)
-- [Guia do Frontend](docs/FRONTEND.md)
-- [Guia do Banco de Dados](docs/DATABASE_GUIDE.md)
-- [Disaster Recovery](docs/DISASTER_RECOVERY.md)
-- [Docker - Guia Completo](infra/docker/README.md)
-- [Docker - Início Rápido](DOCKER_QUICKSTART.md)
-
----
-
-## 🤝 Contribuindo
-
-1. Fork o projeto
-2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
-3. Commit suas mudanças (`git commit -m 'feat: adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um Pull Request
-
----
-
-## 📄 Licença
-
-MIT License - veja [LICENSE](LICENSE) para detalhes.
-
----
-
-## 👥 Equipe
-
-**IMAC Congelados** - Sistema de Controle de Produção
-
----
-
-## 📞 Suporte
-
-Para dúvidas ou problemas:
-- Abra uma [Issue](https://github.com/LindembergOli/PROD-IMAC/issues)
-- Consulte a [Documentação](docs/)
-- Entre em contato com a equipe de desenvolvimento
-
