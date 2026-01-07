@@ -325,6 +325,196 @@ const ObservationRecordForm: React.FC<{
     );
 };
 
+// ============================================================================
+// COMPONENTE: BulkRegistrationModal
+// ============================================================================
+const BulkRegistrationModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: (mesAno: string, selectedSectors: Sector[]) => void;
+    products: Product[];
+}> = ({ isOpen, onClose, onConfirm, products }) => {
+    const [mesAno, setMesAno] = useState('');
+    const [selectedSectors, setSelectedSectors] = useState<Sector[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    const availableSectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+
+    const productCountBySector = useMemo(() => {
+        const counts: Record<string, number> = {};
+        availableSectors.forEach(sector => {
+            counts[sector] = products.filter(p => p.sector === sector).length;
+        });
+        return counts;
+    }, [products]);
+
+    const totalProductsToCreate = useMemo(() => {
+        return selectedSectors.reduce((sum, sector) => sum + (productCountBySector[sector] || 0), 0);
+    }, [selectedSectors, productCountBySector]);
+
+    const toggleSector = (sector: Sector) => {
+        setSelectedSectors(prev =>
+            prev.includes(sector)
+                ? prev.filter(s => s !== sector)
+                : [...prev, sector]
+        );
+    };
+
+    const toggleAll = () => {
+        if (selectedSectors.length === availableSectors.length) {
+            setSelectedSectors([]);
+        } else {
+            setSelectedSectors(availableSectors);
+        }
+    };
+
+    const handleConfirm = () => {
+        if (!mesAno) {
+            alert('Por favor, selecione o mês/ano.');
+            return;
+        }
+        if (selectedSectors.length === 0) {
+            alert('Por favor, selecione pelo menos um setor.');
+            return;
+        }
+        onConfirm(mesAno, selectedSectors);
+        handleClose();
+    };
+
+    const handleClose = () => {
+        setMesAno('');
+        setSelectedSectors([]);
+        setIsLoading(false);
+        onClose();
+    };
+
+    useEffect(() => {
+        if (isOpen && !mesAno) {
+            setMesAno(getCurrentMesAno());
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const inputClass = "mt-1 block w-full rounded-md border-gray-300 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white";
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6 border-b dark:border-slate-700">
+                    <h2 className="text-2xl font-bold text-imac-tertiary dark:text-imac-primary">Registro Geral de Produção</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Crie registros para todos os produtos dos setores selecionados de uma vez
+                    </p>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Mês/Ano *
+                        </label>
+                        <DatePickerInput
+                            type="month"
+                            value={mesAno ? (() => {
+                                const [m, y] = mesAno.split('/');
+                                return `${y}-${m}`;
+                            })() : ''}
+                            onChange={(date) => {
+                                const [y, m] = date.split('-');
+                                setMesAno(`${m}/${y}`);
+                            }}
+                        />
+                    </div>
+
+                    <div>
+                        <div className="flex items-center justify-between mb-3">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Selecione os Setores *
+                            </label>
+                            <button
+                                type="button"
+                                onClick={toggleAll}
+                                className="text-xs text-imac-primary hover:text-imac-tertiary font-medium"
+                            >
+                                {selectedSectors.length === availableSectors.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {availableSectors.map(sector => (
+                                <label
+                                    key={sector}
+                                    className={`
+                                        flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all
+                                        ${selectedSectors.includes(sector)
+                                            ? 'border-imac-primary bg-imac-primary/5 dark:bg-imac-primary/10'
+                                            : 'border-gray-200 dark:border-slate-600 hover:border-imac-primary/50'
+                                        }
+                                    `}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedSectors.includes(sector)}
+                                            onChange={() => toggleSector(sector)}
+                                            className="w-4 h-4 text-imac-primary rounded focus:ring-imac-primary"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                            {sector}
+                                        </span>
+                                    </div>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold">
+                                        {productCountBySector[sector] || 0} produto{productCountBySector[sector] !== 1 ? 's' : ''}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {totalProductsToCreate > 0 && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <span className="font-bold">{totalProductsToCreate}</span> registro{totalProductsToCreate !== 1 ? 's' : ''} será{totalProductsToCreate !== 1 ? 'ão' : ''} criado{totalProductsToCreate !== 1 ? 's' : ''} com valores zerados.
+                                <br />
+                                <span className="text-xs">Você poderá editar cada registro individualmente depois.</span>
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-6 border-t dark:border-slate-700 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        onClick={handleClose}
+                        disabled={isLoading}
+                        className="bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-white px-4 py-2 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold disabled:opacity-50"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleConfirm}
+                        disabled={isLoading || selectedSectors.length === 0}
+                        className="bg-imac-success text-white px-6 py-2 rounded-lg hover:opacity-90 font-semibold disabled:opacity-50 flex items-center gap-2"
+                    >
+                        {isLoading ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                Criando...
+                            </>
+                        ) : (
+                            <>
+                                <Plus size={18} />
+                                Criar Registros
+                            </>
+                        )}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface ProductionSpeedProps {
     products: Product[];
     records: ProductionSpeedRecord[];
@@ -367,6 +557,12 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
     const [viewData, setViewData] = useState<any | null>(null);
     const [viewTitle, setViewTitle] = useState('');
     const [viewFields, setViewFields] = useState<any[]>([]);
+
+    // Estados para registro em massa
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+
+    // Estado para exclusão em massa por mês
+    const [deleteMonthData, setDeleteMonthData] = useState<{ mesAno: string; recordIds: number[] } | null>(null);
 
     const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
@@ -425,6 +621,52 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
             return true;
         }).sort((a, b) => a.sector.localeCompare(b.sector));
     }, [records, tableFilters]);
+
+    // ============================================================================
+    // LÓGICA PARA ACCORDION DE REGISTROS (AGRUPAMENTO POR MÊS)
+    // ============================================================================
+    const [openMonths, setOpenMonths] = useState<string[]>([]);
+
+    const groupedRecords = useMemo(() => {
+        const groups: Record<string, ProductionSpeedRecord[]> = {};
+
+        filteredTableRecords.forEach(rec => {
+            if (!groups[rec.mesAno]) {
+                groups[rec.mesAno] = [];
+            }
+            groups[rec.mesAno]!.push(rec);
+        });
+
+        return Object.entries(groups).sort((a, b) => {
+            const [mA, yA] = a[0].split('/');
+            const [mB, yB] = b[0].split('/');
+            return new Date(Number(yB), Number(mB) - 1).getTime() - new Date(Number(yA), Number(mA) - 1).getTime();
+        });
+    }, [filteredTableRecords]);
+
+    useEffect(() => {
+        if (groupedRecords.length > 0 && openMonths.length === 0) {
+            const firstMonth = groupedRecords[0]?.[0];
+            if (firstMonth) {
+                setOpenMonths([firstMonth]);
+            }
+        }
+    }, [groupedRecords.length]);
+
+    const toggleMonth = (month: string) => {
+        setOpenMonths(prev =>
+            prev.includes(month)
+                ? prev.filter(m => m !== month)
+                : [...prev, month]
+        );
+    };
+
+    const formatMonthYear = (mesAno: string) => {
+        const [m, y] = mesAno.split('/');
+        const date = new Date(Number(y), Number(m) - 1, 1);
+        const formatted = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    };
 
     const kpiData = useMemo(() => {
         if (filteredOverviewRecords.length === 0) {
@@ -544,6 +786,89 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
 
     const handleDeleteClick = (id: number) => {
         setDeleteId(id);
+    };
+
+    const handleBulkRegistration = async (mesAno: string, selectedSectors: Sector[]) => {
+        try {
+            const productsToCreate = products.filter(p => selectedSectors.includes(p.sector));
+
+            if (productsToCreate.length === 0) {
+                alert('Nenhum produto encontrado para os setores selecionados.');
+                return;
+            }
+
+            const recordsToCreate = productsToCreate.map(product => ({
+                mesAno,
+                sector: product.sector,
+                produto: product.name,
+                metaMes: 0,
+                dailyProduction: Array.from({ length: 31 }, () => ({ programado: 0, realizado: 0 })),
+                totalProgramado: 0,
+                totalRealizado: 0,
+                velocidade: 0
+            }));
+
+            let created = 0;
+            let errors = 0;
+
+            for (const record of recordsToCreate) {
+                try {
+                    await productionService.create(record);
+                    created++;
+                } catch (error: any) {
+                    console.error(`Erro ao criar registro para ${record.produto}:`, error);
+                    errors++;
+                }
+            }
+
+            const updatedRecords = await productionService.getAll();
+            setRecords(updatedRecords);
+
+            if (errors === 0) {
+                alert(`✅ ${created} registro${created !== 1 ? 's' : ''} criado${created !== 1 ? 's' : ''} com sucesso!`);
+            } else {
+                alert(`⚠️ ${created} registro${created !== 1 ? 's' : ''} criado${created !== 1 ? 's' : ''} com sucesso.\n${errors} erro${errors !== 1 ? 's' : ''} encontrado${errors !== 1 ? 's' : ''}.`);
+            }
+        } catch (error) {
+            console.error('Erro ao criar registros em massa:', error);
+            alert('Erro ao criar registros em massa. Por favor, tente novamente.');
+        }
+    };
+
+    const handleDeleteMonthClick = (mesAno: string, recordIds: number[]) => {
+        setDeleteMonthData({ mesAno, recordIds });
+    };
+
+    const confirmDeleteMonth = async () => {
+        if (!deleteMonthData) return;
+
+        try {
+            let deleted = 0;
+            let errors = 0;
+
+            for (const id of deleteMonthData.recordIds) {
+                try {
+                    await productionService.delete(id);
+                    deleted++;
+                } catch (error) {
+                    console.error(`Erro ao deletar registro ${id}:`, error);
+                    errors++;
+                }
+            }
+
+            const updatedRecords = await productionService.getAll();
+            setRecords(updatedRecords);
+            setDeleteMonthData(null);
+
+            if (errors === 0) {
+                alert(`✅ ${deleted} registro${deleted !== 1 ? 's' : ''} excluído${deleted !== 1 ? 's' : ''} com sucesso!`);
+            } else {
+                alert(`⚠️ ${deleted} registro${deleted !== 1 ? 's' : ''} excluído${deleted !== 1 ? 's' : ''} com sucesso.\n${errors} erro${errors !== 1 ? 's' : ''} encontrado${errors !== 1 ? 's' : ''}.`);
+            }
+        } catch (error) {
+            console.error('Erro ao deletar registros do mês:', error);
+            alert('Erro ao deletar registros. Por favor, tente novamente.');
+        }
     };
 
     const handleExportXLSX = () => {
@@ -1096,10 +1421,16 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                     </button>
                 </div>
                 {canCreate() && (
-                    <button onClick={() => handleOpenModal()} className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-semibold">
-                        <Plus size={20} className="mr-2" />
-                        Novo Registro
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsBulkModalOpen(true)} className="flex items-center justify-center bg-imac-primary text-white px-4 py-2 rounded-lg hover:opacity-90 transition font-semibold">
+                            <Plus size={20} className="mr-2" />
+                            Registro Geral
+                        </button>
+                        <button onClick={() => handleOpenModal()} className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-semibold">
+                            <Plus size={20} className="mr-2" />
+                            Registro Individual
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -1288,6 +1619,21 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 onConfirm={confirmDeleteObservation}
                 title="Excluir Observação"
                 message="Tem certeza que deseja excluir esta observação? Esta ação não pode ser desfeita."
+            />
+
+            <ConfirmModal
+                isOpen={!!deleteMonthData}
+                onClose={() => setDeleteMonthData(null)}
+                onConfirm={confirmDeleteMonth}
+                title={`Excluir Todos os Registros de ${deleteMonthData ? formatMonthYear(deleteMonthData.mesAno) : ''}`}
+                message={`Tem certeza que deseja excluir TODOS os ${deleteMonthData?.recordIds.length || 0} registros de ${deleteMonthData ? formatMonthYear(deleteMonthData.mesAno) : ''}? Esta ação não pode ser desfeita.`}
+            />
+
+            <BulkRegistrationModal
+                isOpen={isBulkModalOpen}
+                onClose={() => setIsBulkModalOpen(false)}
+                onConfirm={handleBulkRegistration}
+                products={products}
             />
 
             <ViewModal
