@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { sanitizeFormInput } from '../utils/sanitize';
-import { Plus, Package, Pencil, Trash2, FileSpreadsheet, FileText, Eye } from 'lucide-react';
+import { Plus, Package, Pencil, Trash2, FileSpreadsheet, FileText, Eye, ChevronDown, Briefcase } from 'lucide-react';
 import type { Supply } from '../types';
 import { Sector, Unit } from '../types';
 import * as XLSX from 'xlsx';
@@ -181,6 +181,12 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
         name: ''
     });
 
+    // Estados para controle de accordions (agrupamento por setor)
+    const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
+
+    // Estado para exclusão em massa de registros por setor
+    const [deleteSectorData, setDeleteSectorData] = useState<{ sector: string; supplyIds: number[] } | null>(null);
+
     const filteredAndSortedSupplies = useMemo(() => {
         if (!supplies || !Array.isArray(supplies)) return [];
 
@@ -198,6 +204,28 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
 
         return filtered.sort((a, b) => a.sector.localeCompare(b.sector));
     }, [supplies, filters]);
+
+    // Agrupar insumos filtrados por setor para exibição em accordions
+    const groupedSupplies = useMemo(() => {
+        const groups: Record<string, Supply[]> = {};
+        filteredAndSortedSupplies.forEach(supply => {
+            const sector = supply.sector;
+            if (!groups[sector]) groups[sector] = [];
+            groups[sector].push(supply);
+        });
+        return groups;
+    }, [filteredAndSortedSupplies]);
+
+    // Abrir automaticamente o primeiro accordion ao carregar os dados
+    React.useEffect(() => {
+        const sectors = Object.keys(groupedSupplies);
+        if (sectors.length > 0 && Object.keys(openAccordions).length === 0) {
+            const firstSector = sectors[0];
+            if (firstSector) {
+                setOpenAccordions({ [firstSector]: true });
+            }
+        }
+    }, [groupedSupplies]);
 
     const clearFilters = () => {
         setFilters({ sector: '', name: '' });
@@ -253,6 +281,48 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
     const handleDeleteClick = (id: number) => {
         setDeleteId(id);
     };
+
+    // Alternar estado de abertura/fechamento de um accordion específico
+    const toggleAccordion = (sector: string) => {
+        setOpenAccordions(prev => ({ ...prev, [sector]: !prev[sector] }));
+    };
+
+    // Preparar dados para exclusão em massa de todos os insumos de um setor
+    const handleDeleteSectorClick = (sector: string, ids: number[]) => {
+        setDeleteSectorData({ sector, supplyIds: ids });
+    };
+
+    // Confirmar e executar exclusão em massa de insumos por setor
+    const confirmDeleteSector = async () => {
+        if (!deleteSectorData) return;
+
+        let deleted = 0;
+        let errors = 0;
+
+        // Deletar cada insumo individualmente
+        for (const id of deleteSectorData.supplyIds) {
+            try {
+                await suppliesService.delete(id);
+                deleted++;
+            } catch (error) {
+                console.error(`Erro ao deletar insumo ${id}`, error);
+                errors++;
+            }
+        }
+
+        // Recarregar insumos atualizados do backend
+        const updatedSupplies = await suppliesService.getAll();
+        setSupplies(updatedSupplies);
+        setDeleteSectorData(null);
+
+        // Exibir resultado da operação
+        if (errors === 0) {
+            alert(`✅ ${deleted} insumos excluídos com sucesso!`);
+        } else {
+            alert(`⚠️ ${deleted} excluídos. ${errors} erros.`);
+        }
+    };
+
 
     const handleExportXLSX = () => {
         if (!Array.isArray(supplies) || supplies.length === 0) {
@@ -368,57 +438,126 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
                     Lista de Insumos ({filteredAndSortedSupplies.length})
                 </h2>
 
-                <div className="overflow-x-auto">
-                    <div className="min-w-[800px] align-middle">
-                        <div className="grid grid-cols-11 gap-4 px-4 py-3 bg-imac-secondary/20 dark:bg-slate-700/50 rounded-lg">
-                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
-                            <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Unidade</div>
-                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Custo por KG</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
+                {/* Container principal dos accordions agrupados por setor */}
+                <div className="space-y-4">
+                    {Object.entries(groupedSupplies).length === 0 ? (
+                        <div className="text-center py-16 text-gray-400">
+                            <div className="flex flex-col items-center justify-center">
+                                <Package size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
+                                <p>{filters.sector || filters.name ? 'Nenhum insumo encontrado com os filtros aplicados' : 'Nenhum insumo cadastrado'}</p>
+                            </div>
                         </div>
-                        {/* Body */}
-                        <div className="mt-2">
-                            {filteredAndSortedSupplies.length === 0 ? (
-                                <div className="text-center py-16 text-gray-400">
-                                    <div className="flex flex-col items-center justify-center">
-                                        <Package size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
-                                        <p>{filters.sector || filters.name ? 'Nenhum insumo encontrado com os filtros aplicados' : 'Nenhum insumo cadastrado'}</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                filteredAndSortedSupplies.map((supply) => (
-                                    <div key={supply.id} className="grid grid-cols-11 gap-4 items-center px-4 py-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                                        <div className="col-span-3 text-gray-600 dark:text-gray-300">{supply.sector}</div>
-                                        <div className="col-span-4 font-medium text-gray-800 dark:text-gray-100">{supply.name}</div>
-                                        <div className="col-span-1 text-gray-600 dark:text-gray-400">{supply.unit}</div>
-                                        <div className="col-span-2 text-gray-600 dark:text-gray-400">
-                                            {supply.unitCost ? supply.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                    ) : (
+                        Object.entries(groupedSupplies)
+                            .sort(([a], [b]) => a.localeCompare(b)) // Ordenar por setor alfabeticamente
+                            .map(([sector, sectorSupplies]) => {
+                                const isOpen = openAccordions[sector] || false;
+
+                                return (
+                                    <div key={sector} className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200/60 dark:border-slate-700/60 overflow-hidden transition-all duration-300">
+                                        {/* Cabeçalho do Accordion */}
+                                        <div
+                                            className={`
+                                                flex items-center justify-between p-4 transition-colors border-l-4
+                                                ${isOpen
+                                                    ? 'bg-imac-primary/5 dark:bg-slate-700/50 border-imac-primary border-b border-b-imac-primary/10'
+                                                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/30 border-transparent'}
+                                            `}
+                                        >
+                                            <div
+                                                onClick={() => toggleAccordion(sector)}
+                                                className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                            >
+                                                <div className={`p-2 rounded-lg ${isOpen ? 'bg-imac-primary text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
+                                                    <Briefcase size={20} />
+                                                </div>
+                                                <div>
+                                                    <h4 className={`text-lg font-bold ${isOpen ? 'text-imac-primary' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                        {sector}
+                                                    </h4>
+                                                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                        {sectorSupplies.length} {sectorSupplies.length !== 1 ? 'insumos' : 'insumo'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {/* Botão de exclusão em massa (apenas se usuário tiver permissão) */}
+                                                {!isEspectador() && canDelete() && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSectorClick(sector, sectorSupplies.map(supply => supply.id));
+                                                        }}
+                                                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors no-print"
+                                                        title={`Excluir todos os ${sectorSupplies.length} insumos do setor ${sector}`}
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                )}
+                                                {/* Ícone de expansão/colapso */}
+                                                <div
+                                                    onClick={() => toggleAccordion(sector)}
+                                                    className={`transform transition-transform duration-300 cursor-pointer p-2 ${isOpen ? 'rotate-180 text-imac-primary' : 'text-gray-400'}`}
+                                                >
+                                                    <ChevronDown size={24} />
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="col-span-1 flex justify-center items-center gap-2 no-print">
-                                            <button type="button" onClick={() => { setViewData(supply); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
-                                                <Eye size={18} />
-                                            </button>
-                                            {!isEspectador() && (
-                                                <>
-                                                    {canEdit() && (
-                                                        <button type="button" onClick={() => handleOpenModal(supply)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${supply.name}`}>
-                                                            <Pencil size={18} />
-                                                        </button>
-                                                    )}
-                                                    {canDelete() && (
-                                                        <button type="button" onClick={() => handleDeleteClick(supply.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${supply.name}`}>
-                                                            <Trash2 size={18} />
-                                                        </button>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
+
+                                        {/* Corpo do Accordion (lista de insumos) */}
+                                        {isOpen && (
+                                            <div className="animate-fadeIn">
+                                                <div className="overflow-x-auto w-full">
+                                                    <div className="min-w-[800px] align-middle">
+                                                        {/* Header */}
+                                                        <div className="grid grid-cols-11 gap-4 px-4 py-3 bg-imac-secondary/20 dark:bg-slate-700/50">
+                                                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
+                                                            <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
+                                                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Unidade</div>
+                                                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Custo por KG</div>
+                                                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
+                                                        </div>
+
+                                                        {/* Body */}
+                                                        <div className="divide-y divide-gray-100 dark:divide-slate-700">
+                                                            {sectorSupplies.map((supply) => (
+                                                                <div key={supply.id} className="grid grid-cols-11 gap-4 items-center px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                                                                    <div className="col-span-3 text-gray-700 dark:text-gray-400 uppercase">{supply.sector}</div>
+                                                                    <div className="col-span-4 font-bold text-slate-700 dark:text-gray-200 uppercase">{supply.name}</div>
+                                                                    <div className="col-span-1 text-gray-700 dark:text-gray-400">{supply.unit}</div>
+                                                                    <div className="col-span-2 text-gray-700 dark:text-gray-400">
+                                                                        {supply.unitCost ? supply.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                                                    </div>
+                                                                    <div className="col-span-1 flex justify-center items-center gap-2 no-print">
+                                                                        <button type="button" onClick={() => { setViewData(supply); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                                                            <Eye size={18} />
+                                                                        </button>
+                                                                        {!isEspectador() && (
+                                                                            <>
+                                                                                {canEdit() && (
+                                                                                    <button type="button" onClick={() => handleOpenModal(supply)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${supply.name}`}>
+                                                                                        <Pencil size={18} />
+                                                                                    </button>
+                                                                                )}
+                                                                                {canDelete() && (
+                                                                                    <button type="button" onClick={() => handleDeleteClick(supply.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${supply.name}`}>
+                                                                                        <Trash2 size={18} />
+                                                                                    </button>
+                                                                                )}
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                                );
+                            })
+                    )}
                 </div>
             </main>
 
@@ -454,6 +593,15 @@ const Supplies: React.FC<SuppliesProps> = ({ supplies, setSupplies }) => {
                 onConfirm={confirmDelete}
                 title="Excluir Insumo"
                 message="Tem certeza que deseja excluir este insumo? Esta ação não pode ser desfeita."
+            />
+
+            {/* Modal de confirmação para exclusão em massa de insumos por setor */}
+            <ConfirmModal
+                isOpen={!!deleteSectorData}
+                onClose={() => setDeleteSectorData(null)}
+                onConfirm={confirmDeleteSector}
+                title="Excluir Insumos do Setor"
+                message={`Tem certeza que deseja excluir todos os ${deleteSectorData?.supplyIds.length || 0} insumos do setor ${deleteSectorData?.sector || ''}? Esta ação não pode ser desfeita.`}
             />
         </div>
     );

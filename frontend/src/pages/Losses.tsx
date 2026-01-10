@@ -5,7 +5,7 @@ import { formatChartNumber, formatText } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter, Eye, ChevronDown, Calendar } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart as RechartsLineChart, Line, ComposedChart, LabelList } from 'recharts';
@@ -25,8 +25,6 @@ const COLORS = {
     tertiary: '#B36B3C',
     error: '#E74C3C',
 };
-
-// getMesAnoOptions removido pois agora usamos DatePickerInput com type="month"
 
 const LossRecordForm: React.FC<{
     record: Partial<LossRecord> | null;
@@ -236,6 +234,10 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [viewData, setViewData] = useState<LossRecord | null>(null);
 
+    // Novos estados para Accordion e Exclusão em Massa
+    const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+    const [deleteMonthData, setDeleteMonthData] = useState<{ mesAno: string; recordIds: number[] } | null>(null);
+
 
     // Filtros para Visão Geral
     const [overviewFilters, setOverviewFilters] = useState({
@@ -293,7 +295,6 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     const filteredTableRecords = useMemo(() => {
         if (!Array.isArray(records)) return [];
 
-        // Função auxiliar para normalizar strings para comparação
         const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
         return records.filter(rec => {
@@ -305,19 +306,87 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             if (tableFilters.sector !== 'Todos' && normalize(String(rec.sector)) !== normalize(tableFilters.sector)) return false;
             if (tableFilters.type !== 'Todos' && rec.lossType !== tableFilters.type) return false;
             return true;
-        }); // Ordenação removida - agora vem do backend (data DESC, setor ASC, produto ASC)
+        });
     }, [records, tableFilters]);
+
+    // Agrupamento por Mês
+    const groupedRecords = useMemo(() => {
+        const groups: Record<string, LossRecord[]> = {};
+
+        filteredTableRecords.forEach(rec => {
+            const date = new Date(rec.date);
+            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`; // YYYY-MM
+
+            if (!groups[key]) {
+                groups[key] = [];
+            }
+            groups[key].push(rec);
+        });
+
+        // Ordenar chaves decrescente
+        return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+    }, [filteredTableRecords]);
+
+    // Abrir o primeiro accordion por padrão
+    useEffect(() => {
+        if (groupedRecords.length > 0 && openAccordions.length === 0) {
+            const firstKey = groupedRecords[0]?.[0];
+            if (firstKey) setOpenAccordions([firstKey]);
+        }
+    }, [groupedRecords.length]);
+
+    const toggleAccordion = (key: string) => {
+        setOpenAccordions(prev =>
+            prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+        );
+    };
+
+    const formatMonthYear = (key: string) => {
+        const [year, month] = key.split('-');
+        const date = new Date(Number(year), Number(month) - 1, 1);
+        const formatted = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    };
+
+    const handleDeleteMonthClick = (key: string, ids: number[]) => {
+        setDeleteMonthData({ mesAno: key, recordIds: ids });
+    };
+
+    const confirmDeleteMonth = async () => {
+        if (!deleteMonthData) return;
+
+        let deleted = 0;
+        let errors = 0;
+
+        for (const id of deleteMonthData.recordIds) {
+            try {
+                await lossesService.delete(id);
+                deleted++;
+            } catch (error) {
+                console.error(`Erro ao deletar registro ${id}`, error);
+                errors++;
+            }
+        }
+
+        const updatedRecords = await lossesService.getAll();
+        setRecords(updatedRecords);
+        setDeleteMonthData(null);
+
+        if (errors === 0) {
+            alert(`✅ ${deleted} registros excluídos com sucesso!`);
+        } else {
+            alert(`⚠️ ${deleted} excluídos. ${errors} erros.`);
+        }
+    };
 
 
     const kpiData = useMemo(() => {
         return filteredOverviewRecords.reduce((acc, rec) => {
-            // Total Geral
             if (rec.unit === Unit.KG) {
                 acc.totalLossKg += rec.quantity;
             }
             acc.totalCost += rec.totalCost;
 
-            // Totais por Categoria
             if (rec.lossType === LossType.MASSA) {
                 acc.lossMassa += rec.quantity;
             } else if (rec.lossType === LossType.EMBALAGEM) {
@@ -379,7 +448,6 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     const handleSave = async (data: Omit<LossRecord, 'id'>) => {
         if (!Array.isArray(records)) return;
         try {
-            // Converter campos de texto para maiúsculas
             const normalizedData = {
                 ...data,
                 product: data.product.toUpperCase()
@@ -391,7 +459,6 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                 await lossesService.create(normalizedData);
             }
 
-            // Recarregar todos os registros para garantir ordenação correta do backend
             const updatedRecords = await lossesService.getAll();
             setRecords(updatedRecords);
             handleCloseModal();
@@ -426,7 +493,6 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removido
         const dataToExport = filteredTableRecords.map(r => ({
             'Data': new Date(r.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
             'Setor': r.sector,
@@ -447,7 +513,6 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removido
         const doc = new jsPDF();
         doc.text("Relatório de Perdas de Produção", 14, 16);
         autoTable(doc, {
@@ -640,55 +705,120 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
+            <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><TrendingUp size={20} />Registros de Perdas</h3>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50/50 dark:bg-slate-700/50">
-                            <tr>
-                                <th className="px-6 py-3">Data</th>
-                                <th className="px-6 py-3">Setor</th>
-                                <th className="px-6 py-3">Produto</th>
-                                <th className="px-6 py-3">Tipo</th>
-                                <th className="px-6 py-3 text-right">Quantidade</th>
-                                <th className="px-6 py-3 text-right">Custo (R$)</th>
 
-                                <th className="px-6 py-3 text-center no-print">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-gray-600 dark:text-gray-300">
-                            {filteredTableRecords.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="text-center py-10 text-gray-400">Nenhuma perda encontrada</td>
-                                </tr>
-                            ) : filteredTableRecords.map(rec => (
-                                <tr key={rec.id} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                                    <td className="px-6 py-4">{new Date(rec.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
-                                    <td className="px-6 py-4">{rec.sector}</td>
-                                    <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-100">{rec.product}</td>
-                                    <td className="px-6 py-4">{rec.lossType.toUpperCase()}</td>
-                                    <td className="px-6 py-4 text-right">{rec.quantity} {rec.unit}</td>
-                                    <td className="px-6 py-4 font-semibold text-right">{rec.totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                                    <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                                        <button type="button" onClick={() => { setViewData(rec); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
-                                            <Eye size={18} />
-                                        </button>
-                                        {!isEspectador() && (
-                                            <>
-                                                {canEdit() && (
-                                                    <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                                                )}
-                                                {canDelete() && (
-                                                    <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                                                )}
-                                            </>
+                {groupedRecords.length === 0 ? (
+                    <div className="bg-white dark:bg-slate-800 p-10 rounded-xl shadow-lg border border-dashed border-gray-300 dark:border-slate-700 text-center">
+                        <p className="text-gray-400 text-lg">Nenhum registro encontrado.</p>
+                    </div>
+                ) : (
+                    groupedRecords.map(([key, groupData]) => {
+                        const isOpen = openAccordions.includes(key);
+                        const label = formatMonthYear(key);
+
+                        return (
+                            <div key={key} className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200/60 dark:border-slate-700/60 overflow-hidden transition-all duration-300">
+                                {/* Header */}
+                                <div
+                                    className={`
+                                        flex items-center justify-between p-4 transition-colors border-l-4
+                                        ${isOpen
+                                            ? 'bg-imac-primary/5 dark:bg-slate-700/50 border-imac-primary border-b border-b-imac-primary/10'
+                                            : 'hover:bg-gray-50 dark:hover:bg-slate-700/30 border-transparent'}
+                                    `}
+                                >
+                                    <div
+                                        onClick={() => toggleAccordion(key)}
+                                        className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                    >
+                                        <div className={`p-2 rounded-lg ${isOpen ? 'bg-imac-primary text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
+                                            <Calendar size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className={`text-lg font-bold ${isOpen ? 'text-imac-primary' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                {label}
+                                            </h4>
+                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                {groupData.length} registro{groupData.length !== 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {canDelete() && !isEspectador() && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteMonthClick(key, groupData.map(r => r.id));
+                                                }}
+                                                className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors no-print"
+                                                title={`Excluir todos os registros de ${label}`}
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
                                         )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                        <div
+                                            onClick={() => toggleAccordion(key)}
+                                            className={`transform transition-transform duration-300 cursor-pointer p-2 ${isOpen ? 'rotate-180 text-imac-primary' : 'text-gray-400'}`}
+                                        >
+                                            <ChevronDown size={24} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Body */}
+                                {isOpen && (
+                                    <div className="animate-fadeIn">
+                                        <div className="overflow-x-auto w-full">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50/50 dark:bg-slate-700/50">
+                                                    <tr>
+                                                        <th className="px-6 py-3">Data</th>
+                                                        <th className="px-6 py-3">Setor</th>
+                                                        <th className="px-6 py-3">Produto</th>
+                                                        <th className="px-6 py-3">Tipo</th>
+                                                        <th className="px-6 py-3 text-right">Quantidade</th>
+                                                        <th className="px-6 py-3 text-right">Custo (R$)</th>
+                                                        <th className="px-6 py-3 text-center no-print">Ações</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                                                    {groupData.map(rec => (
+                                                        <tr key={rec.id} className="bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                            <td className="px-6 py-4 text-gray-700 dark:text-gray-400">{new Date(rec.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                                                            <td className="px-6 py-4 text-gray-700 dark:text-gray-400 uppercase">{rec.sector}</td>
+                                                            <td className="px-6 py-4 font-bold text-slate-700 dark:text-gray-200 uppercase">{rec.product}</td>
+                                                            <td className="px-6 py-4 text-gray-700 dark:text-gray-300 uppercase">
+                                                                {rec.lossType}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right text-gray-700 dark:text-gray-400">{rec.quantity} {rec.unit}</td>
+                                                            <td className="px-6 py-4 font-semibold text-right text-gray-700 dark:text-gray-400">{rec.totalCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                                                            <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                                                                <button type="button" onClick={() => { setViewData(rec); setIsViewModalOpen(true); }} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                                                    <Eye size={18} />
+                                                                </button>
+                                                                {!isEspectador() && (
+                                                                    <>
+                                                                        {canEdit() && (
+                                                                            <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                                        )}
+                                                                        {canDelete() && (
+                                                                            <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                                        )}
+                                                                    </>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                )}
             </div>
         </div>
     );
@@ -739,16 +869,24 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
                 message="Tem certeza que deseja excluir este registro de perda? Esta ação não pode ser desfeita."
             />
 
+            <ConfirmModal
+                isOpen={!!deleteMonthData}
+                onClose={() => setDeleteMonthData(null)}
+                onConfirm={confirmDeleteMonth}
+                title={`Excluir Todos os Registros de ${deleteMonthData ? formatMonthYear(deleteMonthData.mesAno) : ''}`}
+                message={`Tem certeza que deseja excluir TODOS os ${deleteMonthData?.recordIds.length || 0} registros de ${deleteMonthData ? formatMonthYear(deleteMonthData.mesAno) : ''}? Esta ação não pode ser desfeita.`}
+            />
+
             <ViewModal
                 isOpen={isViewModalOpen}
                 onClose={() => setIsViewModalOpen(false)}
                 title="Detalhes da Perda"
                 data={viewData}
                 fields={[
-                    { label: 'Data', key: 'date', format: (v: string) => new Date(v).toLocaleDateString('pt-BR') },
-                    { label: 'Setor', key: 'sector', format: (v: string) => formatText(v) },
+                    { label: 'Data', key: 'date', format: (v: string) => new Date(v).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) },
+                    { label: 'Setor', key: 'sector' },
                     { label: 'Produto', key: 'product' },
-                    { label: 'Tipo', key: 'lossType', format: (v: string) => formatText(v) },
+                    { label: 'Tipo', key: 'lossType' },
                     { label: 'Quantidade', key: 'quantity', format: (v: number) => `${v} ${viewData?.unit || ''}` },
                     { label: 'Custo Unit.', key: 'unitCost', format: (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
                     { label: 'Custo Total', key: 'totalCost', format: (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }

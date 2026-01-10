@@ -5,10 +5,10 @@ import { formatChartNumber } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Plus, Pencil, Trash2, TrendingUp, List, File, Activity, ArrowRight, ArrowLeftRight, FileText, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, TrendingUp, List, File, Activity, ArrowRight, ArrowLeftRight, FileText, Eye, ChevronDown, ChevronRight, Calendar, AlertTriangle, Tag, Briefcase } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
-import { ComposedChart, Line, Bar, BarChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
+import { ComposedChart, Line, Bar, BarChart, PieChart, Pie, Cell, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
 import ViewModal from '../components/ViewModal';
 import DatePickerInput from '../components/DatePickerInput';
@@ -23,6 +23,7 @@ const COLORS = {
     tertiary: '#B36B3C',
     success: '#2ECC71',
     error: '#E74C3C',
+    pie: ['#34D399', '#FBBF24', '#F87171', '#60A5FA', '#A78BFA', '#F472B6', '#22D3EE', '#FB923C', '#A3E635', '#818CF8'] // Emerald, Amber, Red, Blue, Violet, Pink, Cyan, Orange, Lime, Indigo
 };
 
 // getMesAnoOptions removido pois agora usamos DatePickerInput com type="month"
@@ -340,6 +341,7 @@ const BulkRegistrationModal: React.FC<{
 
     const availableSectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
 
+    // Contar produtos por setor
     const productCountBySector = useMemo(() => {
         const counts: Record<string, number> = {};
         availableSectors.forEach(sector => {
@@ -409,6 +411,7 @@ const BulkRegistrationModal: React.FC<{
                 </div>
 
                 <div className="p-6 space-y-6">
+                    {/* Mês/Ano */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Mês/Ano *
@@ -426,6 +429,7 @@ const BulkRegistrationModal: React.FC<{
                         />
                     </div>
 
+                    {/* Seleção de Setores */}
                     <div>
                         <div className="flex items-center justify-between mb-3">
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -471,6 +475,7 @@ const BulkRegistrationModal: React.FC<{
                         </div>
                     </div>
 
+                    {/* Resumo */}
                     {totalProductsToCreate > 0 && (
                         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                             <p className="text-sm text-blue-800 dark:text-blue-200">
@@ -564,6 +569,10 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
     // Estado para exclusão em massa por mês
     const [deleteMonthData, setDeleteMonthData] = useState<{ mesAno: string; recordIds: number[] } | null>(null);
 
+    // Estados para accordion de observações
+    const [openObservationDates, setOpenObservationDates] = useState<string[]>([]);
+    const [deleteObservationDateData, setDeleteObservationDateData] = useState<{ date: string; observationIds: number[] } | null>(null);
+
     const { canCreate, canEdit, canDelete, isEspectador } = useAuth();
 
     const gridColor = isDarkMode ? '#334155' : '#f1f5f9';
@@ -623,13 +632,14 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
     }, [records, tableFilters]);
 
     // ============================================================================
-    // LÓGICA PARA ACCORDION DE REGISTROS (AGRUPAMENTO POR MÊS)
+    // ESTADOS E LÓGICA PARA ACCORDION (AGRUPAMENTO POR MÊS)
     // ============================================================================
     const [openMonths, setOpenMonths] = useState<string[]>([]);
 
     const groupedRecords = useMemo(() => {
         const groups: Record<string, ProductionSpeedRecord[]> = {};
 
+        // Agrupar registros
         filteredTableRecords.forEach(rec => {
             if (!groups[rec.mesAno]) {
                 groups[rec.mesAno] = [];
@@ -637,6 +647,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
             groups[rec.mesAno]!.push(rec);
         });
 
+        // Ordenar os grupos por data (mais recente primeiro)
         return Object.entries(groups).sort((a, b) => {
             const [mA, yA] = a[0].split('/');
             const [mB, yB] = b[0].split('/');
@@ -644,6 +655,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         });
     }, [filteredTableRecords]);
 
+    // Abrir o primeiro grupo por padrão quando os dados carregarem
     useEffect(() => {
         if (groupedRecords.length > 0 && openMonths.length === 0) {
             const firstMonth = groupedRecords[0]?.[0];
@@ -790,6 +802,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
 
     const handleBulkRegistration = async (mesAno: string, selectedSectors: Sector[]) => {
         try {
+            // Filtrar produtos dos setores selecionados
             const productsToCreate = products.filter(p => selectedSectors.includes(p.sector));
 
             if (productsToCreate.length === 0) {
@@ -797,6 +810,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 return;
             }
 
+            // Criar registros com valores zerados
             const recordsToCreate = productsToCreate.map(product => ({
                 mesAno,
                 sector: product.sector,
@@ -808,6 +822,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 velocidade: 0
             }));
 
+            // Criar registros sequencialmente com feedback
             let created = 0;
             let errors = 0;
 
@@ -821,9 +836,11 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 }
             }
 
+            // Recarregar registros
             const updatedRecords = await productionService.getAll();
             setRecords(updatedRecords);
 
+            // Feedback ao usuário
             if (errors === 0) {
                 alert(`✅ ${created} registro${created !== 1 ? 's' : ''} criado${created !== 1 ? 's' : ''} com sucesso!`);
             } else {
@@ -846,6 +863,7 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
             let deleted = 0;
             let errors = 0;
 
+            // Deletar todos os registros do mês
             for (const id of deleteMonthData.recordIds) {
                 try {
                     await productionService.delete(id);
@@ -856,10 +874,12 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 }
             }
 
+            // Recarregar registros
             const updatedRecords = await productionService.getAll();
             setRecords(updatedRecords);
             setDeleteMonthData(null);
 
+            // Feedback
             if (errors === 0) {
                 alert(`✅ ${deleted} registro${deleted !== 1 ? 's' : ''} excluído${deleted !== 1 ? 's' : ''} com sucesso!`);
             } else {
@@ -1090,6 +1110,266 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [observationRecords, observationFilters]);
 
+    // Agrupar observações por data
+    const groupedObservations = useMemo(() => {
+        const groups: Record<string, ProductionObservationRecord[]> = {};
+
+        filteredObservations.forEach(obs => {
+            const dateKey = obs.date.substring(0, 7); // YYYY-MM (Agrupar por Mês)
+            if (!groups[dateKey]) {
+                groups[dateKey] = [];
+            }
+            groups[dateKey]!.push(obs);
+        });
+
+        return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+    }, [filteredObservations]);
+
+    // Calcular KPIs de Observações (Impactos)
+    const observationKpis = useMemo(() => {
+        const impacts = filteredObservations.filter(o => o.hadImpact);
+        const qtdImpactos = impacts.length;
+
+        // Moda de Categoria
+        const typeCounts: Record<string, number> = {};
+        impacts.forEach(o => {
+            const type = o.observationType;
+            typeCounts[type] = (typeCounts[type] || 0) + 1;
+        });
+        const categoriaMaisRecorrente = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
+
+        // Moda de Setor
+        const sectorCounts: Record<string, number> = {};
+        impacts.forEach(o => {
+            const sec = o.sector;
+            sectorCounts[sec] = (sectorCounts[sec] || 0) + 1;
+        });
+        const setorMaisPrejudicado = Object.entries(sectorCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
+
+        return { qtdImpactos, categoriaMaisRecorrente, setorMaisPrejudicado };
+    }, [filteredObservations]);
+
+    // Calcular dados para gráfico de pizza de Impactos por Setor
+    const impactsBySectorData = useMemo(() => {
+        const impacts = filteredObservations.filter(o => o.hadImpact);
+        const sectorCounts: Record<string, number> = {};
+
+        impacts.forEach(o => {
+            const sectorName = Sector[o.sector as keyof typeof Sector] || o.sector;
+            sectorCounts[sectorName] = (sectorCounts[sectorName] || 0) + 1;
+        });
+
+        return Object.entries(sectorCounts)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    }, [filteredObservations]);
+
+    // Calcular dados para gráfico de pizza de Impactos por Categoria
+    const impactsByCategoryData = useMemo(() => {
+        const impacts = filteredObservations.filter(o => o.hadImpact);
+        const categoryCounts: Record<string, number> = {};
+
+        impacts.forEach(o => {
+            const category = o.observationType;
+            categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+        });
+
+        return Object.entries(categoryCounts)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value);
+    }, [filteredObservations]);
+
+    // Calcular dados para gráfico de Taxa de Impactos Mensal
+    const monthlyImpactRateData = useMemo(() => {
+        interface MonthData {
+            productDaysWithImpact: Set<string>; // produto+dia com impacto
+            totalProductDays: Set<string>; // total de produto+dia produzidos
+            impactsBySector: Record<string, number>;
+            impactsByProduct: Record<string, number>;
+            impactsByCategory: Record<string, number>;
+            totalImpacts: number;
+        }
+
+        const monthlyData: Record<string, MonthData> = {};
+
+        // Primeiro: Processar registros de produção para contar produto-dias totais
+        records.forEach(record => {
+            const [monthNum, year] = record.mesAno.split('/');
+            if (!monthNum || !year) return;
+
+            const month = `${year}-${monthNum.padStart(2, '0')}`;
+
+            if (!monthlyData[month]) {
+                monthlyData[month] = {
+                    productDaysWithImpact: new Set(),
+                    totalProductDays: new Set(),
+                    impactsBySector: {},
+                    impactsByProduct: {},
+                    impactsByCategory: {},
+                    totalImpacts: 0
+                };
+            }
+
+            // Para cada dia com produção, adicionar produto+dia
+            record.dailyProduction.forEach((day, index) => {
+                if (day.realizado > 0 || day.programado > 0) {
+                    const dayNum = String(index + 1).padStart(2, '0');
+                    const dayDate = `${month}-${dayNum}`;
+                    const productDay = `${record.produto}|${dayDate}`; // chave: produto|data
+                    monthlyData[month]?.totalProductDays.add(productDay);
+                }
+            });
+        });
+
+        // Segundo: Processar observações com impacto para contar produto-dias impactados
+        observationRecords
+            .filter(o => o.hadImpact)
+            .forEach(obs => {
+                const month = obs.date.substring(0, 7); // YYYY-MM
+                const day = obs.date.substring(0, 10); // YYYY-MM-DD
+                const productDay = `${obs.product}|${day}`; // chave: produto|data
+
+                if (!monthlyData[month]) {
+                    monthlyData[month] = {
+                        productDaysWithImpact: new Set(),
+                        totalProductDays: new Set(),
+                        impactsBySector: {},
+                        impactsByProduct: {},
+                        impactsByCategory: {},
+                        totalImpacts: 0
+                    };
+                }
+
+                // Adicionar produto-dia impactado
+                monthlyData[month].productDaysWithImpact.add(productDay);
+
+                // Também adicionar ao total (caso não tenha registro de produção)
+                monthlyData[month].totalProductDays.add(productDay);
+
+                monthlyData[month].totalImpacts++;
+
+                // Contar por setor
+                const sectorName = Sector[obs.sector as keyof typeof Sector] || obs.sector;
+                monthlyData[month].impactsBySector[sectorName] = (monthlyData[month].impactsBySector[sectorName] || 0) + 1;
+
+                // Contar por produto
+                monthlyData[month].impactsByProduct[obs.product] = (monthlyData[month].impactsByProduct[obs.product] || 0) + 1;
+
+                // Contar por categoria
+                monthlyData[month].impactsByCategory[obs.observationType] = (monthlyData[month].impactsByCategory[obs.observationType] || 0) + 1;
+            });
+
+        // Calcular taxa e preparar dados para o gráfico
+        const chartData = Object.entries(monthlyData)
+            .map(([month, data]) => {
+                const productDaysWithImpact = data.productDaysWithImpact.size;
+                const totalProductDays = data.totalProductDays.size;
+                const taxa = totalProductDays > 0 ? (productDaysWithImpact / totalProductDays) * 100 : 0;
+
+                // Encontrar TODOS os setores mais prejudicados (em caso de empate)
+                const sectorEntries = Object.entries(data.impactsBySector);
+                const maxSectorCount = Math.max(...sectorEntries.map(([, count]) => count), 0);
+                const mostAffectedSectors = sectorEntries
+                    .filter(([, count]) => count === maxSectorCount)
+                    .map(([sector]) => sector);
+
+                // Encontrar TODOS os produtos mais prejudicados (em caso de empate)
+                const productEntries = Object.entries(data.impactsByProduct);
+                const maxProductCount = Math.max(...productEntries.map(([, count]) => count), 0);
+                const mostAffectedProducts = productEntries
+                    .filter(([, count]) => count === maxProductCount)
+                    .map(([product]) => product);
+
+                // Calcular percentual por categoria (ranking)
+                const categoryBreakdown = Object.entries(data.impactsByCategory)
+                    .map(([category, count]) => ({
+                        category,
+                        count,
+                        percentage: data.totalImpacts > 0 ? (count / data.totalImpacts) * 100 : 0
+                    }))
+                    .sort((a, b) => b.percentage - a.percentage);
+
+                // Formatar mês para exibição (03/2026)
+                const [year, monthNum] = month.split('-');
+                const monthLabel = `${monthNum}/${year}`;
+
+                return {
+                    month: monthLabel,
+                    monthKey: month,
+                    taxa: Number(taxa.toFixed(2)),
+                    productDaysWithImpact,
+                    totalProductDays,
+                    mostAffectedSectors: mostAffectedSectors.length > 0 ? mostAffectedSectors : ['-'],
+                    mostAffectedProducts: mostAffectedProducts.length > 0 ? mostAffectedProducts : ['-'],
+                    mostAffectedProductCount: maxProductCount,
+                    categoryBreakdown,
+                    totalImpacts: data.totalImpacts
+                };
+            })
+            .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+            .slice(-12); // Últimos 12 meses
+
+        return chartData;
+    }, [observationRecords, records]);
+
+    useEffect(() => {
+        if (groupedObservations.length > 0 && openObservationDates.length === 0) {
+            const firstDate = groupedObservations[0]?.[0];
+            if (firstDate) setOpenObservationDates([firstDate]);
+        }
+    }, [groupedObservations.length]);
+
+    const toggleObservationDate = (dateKey: string) => {
+        setOpenObservationDates(prev =>
+            prev.includes(dateKey)
+                ? prev.filter(d => d !== dateKey)
+                : [...prev, dateKey]
+        );
+    };
+
+    const formatObservationDate = (dateKey: string) => {
+        const [year, month] = dateKey.split('-');
+        const date = new Date(Number(year), Number(month) - 1, 1);
+        const formatted = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    };
+
+    const handleDeleteObservationDateClick = (dateKey: string, observationIds: number[]) => {
+        setDeleteObservationDateData({ date: dateKey, observationIds });
+    };
+
+    const confirmDeleteObservationDate = async () => {
+        if (!deleteObservationDateData) return;
+
+        try {
+            let deleted = 0;
+            let errors = 0;
+
+            for (const id of deleteObservationDateData.observationIds) {
+                try {
+                    await productionObservationsService.delete(id);
+                    deleted++;
+                } catch (error) {
+                    console.error(`Erro ao deletar observação ${id}:`, error);
+                    errors++;
+                }
+            }
+
+            const updatedRecords = await productionObservationsService.getAll();
+            setObservationRecords(updatedRecords);
+            setDeleteObservationDateData(null);
+
+            if (errors === 0) {
+                alert(`✅ ${deleted} observação${deleted !== 1 ? 'ões' : ''} excluída${deleted !== 1 ? 's' : ''} com sucesso!`);
+            } else {
+                alert(`⚠️ ${deleted} observação${deleted !== 1 ? 'ões' : ''} excluída${deleted !== 1 ? 's' : ''} com sucesso.\n${errors} erro${errors !== 1 ? 's' : ''} encontrado${errors !== 1 ? 's' : ''}.`);
+            }
+        } catch (error) {
+            console.error('Erro ao deletar observações da data:', error);
+            alert('Erro ao deletar observações. Por favor, tente novamente.');
+        }
+    };
+
     const handleExportObservationsXLSX = () => {
         if (filteredObservations.length === 0) {
             alert("Não há dados para exportar.");
@@ -1131,140 +1411,22 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
         doc.save('observacoes_producao.pdf');
     };
 
-    // ============================================================================
-    // RENDER: OBSERVAÇÕES
-    // ============================================================================
-    const renderObservations = () => (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 no-print">
-                <div className="flex items-center gap-2">
-                    <button onClick={handleExportObservationsXLSX} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-green-600 dark:border-green-700 text-green-700 dark:text-green-400 px-4 py-2 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 transition text-sm font-medium">
-                        <File size={16} /> Exportar XLSX
-                    </button>
-                    <button onClick={handleExportObservationsPDF} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-red-600 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition text-sm font-medium">
-                        <File size={16} /> Exportar PDF
-                    </button>
-                </div>
-                {canCreate() && (
-                    <button onClick={() => handleOpenObservationModal()} className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-semibold">
-                        <Plus size={20} className="mr-2" />
-                        Nova Observação
-                    </button>
-                )}
-            </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Data</label>
-                        <DatePickerInput
-                            value={observationFilters.date}
-                            type="month"
-                            onChange={(date) => setObservationFilters({ ...observationFilters, date })}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Setor</label>
-                        <select
-                            value={observationFilters.sector}
-                            onChange={(e) => setObservationFilters({ ...observationFilters, sector: e.target.value })}
-                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
-                        >
-                            <option value="Todos">TODOS</option>
-                            {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Produto</label>
-                        <input
-                            type="text"
-                            placeholder="Buscar produto..."
-                            value={observationFilters.product}
-                            onChange={(e) => setObservationFilters({ ...observationFilters, product: e.target.value })}
-                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Tipo de Observação</label>
-                        <input
-                            type="text"
-                            placeholder="Buscar tipo..."
-                            value={observationFilters.observationType}
-                            onChange={(e) => setObservationFilters({ ...observationFilters, observationType: e.target.value })}
-                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
-                <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><FileText size={20} />Observações de Produção</h3>
-                <div className="overflow-x-auto w-full">
-                    <div className="min-w-[800px]">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50/50 dark:bg-slate-700/50">
-                                <tr>
-                                    <th className="px-6 py-3">Data</th>
-                                    <th className="px-6 py-3">Setor</th>
-                                    <th className="px-6 py-3">Produto</th>
-                                    <th className="px-6 py-3">Tipo de Observação</th>
-                                    <th className="px-6 py-3">Descrição</th>
-                                    <th className="px-6 py-3 text-center">Houve Impacto?</th>
-                                    <th className="px-6 py-3 text-center no-print">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-gray-600 dark:text-gray-300">
-                                {filteredObservations.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="text-center py-10 text-gray-400">Nenhuma observação encontrada</td>
-                                    </tr>
-                                ) : filteredObservations.map(rec => (
-                                    <tr key={rec.id} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                                        <td className="px-6 py-4">{new Date(rec.date).toLocaleDateString('pt-BR')}</td>
-                                        <td className="px-6 py-4">{(Sector[rec.sector as keyof typeof Sector] || rec.sector).toUpperCase()}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-100">{rec.product.toUpperCase()}</td>
-                                        <td className="px-6 py-4">{rec.observationType.toUpperCase()}</td>
-                                        <td className="px-6 py-4 max-w-xs truncate" title={rec.description}>{rec.description}</td>
-                                        <td className="px-6 py-4 text-center font-semibold">{rec.hadImpact ? 'SIM' : 'NÃO'}</td>
-                                        <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                                            <button type="button" onClick={() => handleViewObservation(rec)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
-                                                <Eye size={18} />
-                                            </button>
-                                            {!isEspectador() && (
-                                                <>
-                                                    {canEdit() && (
-                                                        <button type="button" onClick={() => handleOpenObservationModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                                                    )}
-                                                    {canDelete() && (
-                                                        <button type="button" onClick={() => handleDeleteObservationClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                                                    )}
-                                                </>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
 
     const renderOverview = () => (
         <div className="space-y-6">
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Data Início</label>
                         <DatePickerInput
-                            label="Data Início"
                             value={overviewFilters.start}
                             onChange={(date) => setOverviewFilters({ ...overviewFilters, start: date })}
                         />
                     </div>
                     <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Data Fim</label>
                         <DatePickerInput
-                            label="Data Fim"
                             value={overviewFilters.end}
                             onChange={(date) => setOverviewFilters({ ...overviewFilters, end: date })}
                         />
@@ -1285,6 +1447,43 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 />
                 <KpiCard title="Média Diária" value={kpiData.mediaDiaria.toFixed(1)} unit="" icon={<File />} color={COLORS.primary} />
                 <KpiCard title="Velocidade" value={kpiData.velocidade.toFixed(1)} unit="%" icon={<Activity />} color={COLORS.primary} />
+
+                {/* Novos Cards KPI de Observações */}
+                <KpiCard
+                    title="Qtd de Impactos"
+                    value={observationKpis.qtdImpactos.toLocaleString()}
+                    unit=""
+                    icon={<AlertTriangle />}
+                    color={COLORS.error}
+                    tooltip={{
+                        content: "Quantidade de observações registradas com impacto na produção.",
+                        statusColor: COLORS.error
+                    }}
+                />
+                <KpiCard
+                    title="Categoria Mais Recorrente"
+                    value={observationKpis.categoriaMaisRecorrente.toUpperCase()}
+                    unit=""
+                    icon={<Tag />}
+                    color={COLORS.tertiary}
+                    enableWrap={true}
+                    tooltip={{
+                        content: "Tipo de observação com impacto que mais apareceu nos registros feitos.",
+                        statusColor: COLORS.tertiary
+                    }}
+                />
+                <KpiCard
+                    title="Setor Mais Prejudicado"
+                    value={observationKpis.setorMaisPrejudicado.toUpperCase()}
+                    unit=""
+                    icon={<Briefcase />}
+                    color={COLORS.error}
+                    enableWrap={true}
+                    tooltip={{
+                        content: "Setor que mais registrou observações com impacto na produção.",
+                        statusColor: COLORS.error
+                    }}
+                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1406,6 +1605,343 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                     ) : <div className="flex items-center justify-center h-full text-gray-400">Nenhum produto abaixo da meta</div>}
                 </ChartContainer>
             </div>
+
+            {/* Nova Seção: Observações de Produção */}
+            <div className="grid grid-cols-1 gap-6 pt-4 border-t dark:border-slate-700">
+                <h3 className="text-xl font-semibold text-slate-700 dark:text-slate-200">Observações de Produção</h3>
+
+                {/* Gráfico de Taxa de Impactos Mensal - Largura Completa */}
+                <ChartContainer title="Taxa de Impactos Mensal">
+                    {monthlyImpactRateData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={monthlyImpactRateData} margin={{ top: 20, right: 30, left: -10, bottom: 20 }}>
+                                {/* Gradiente para o preenchimento */}
+                                <defs>
+                                    <linearGradient id="impactRateGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#E74C3C" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#E74C3C" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                                <XAxis
+                                    dataKey="month"
+                                    tick={{ fill: tickColor, fontSize: 11 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <YAxis
+                                    tick={{ fill: tickColor, fontSize: 11 }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={(v) => `${v}%`}
+                                />
+
+                                {/* Tooltip Rico Customizado */}
+                                <Tooltip
+                                    cursor={{ fill: 'transparent' }}
+                                    wrapperStyle={{ zIndex: 1000, outline: 'none' }}
+                                    contentStyle={tooltipStyle}
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            const data = payload[0].payload;
+                                            return (
+                                                <div style={{
+                                                    ...tooltipStyle,
+                                                    padding: '16px',
+                                                    border: `2px solid ${COLORS.error}`,
+                                                    borderRadius: '8px',
+                                                    minWidth: '280px',
+                                                    maxWidth: '320px',
+                                                    maxHeight: '400px',
+                                                    overflowY: 'auto'
+                                                }}>
+                                                    {/* Cabeçalho */}
+                                                    <div style={{
+                                                        borderBottom: `1px solid ${isDarkMode ? '#475569' : '#e2e8f0'}`,
+                                                        paddingBottom: '12px',
+                                                        marginBottom: '12px'
+                                                    }}>
+                                                        <p style={{
+                                                            fontWeight: 'bold',
+                                                            fontSize: '16px',
+                                                            color: COLORS.error,
+                                                            marginBottom: '4px'
+                                                        }}>
+                                                            {data.month}
+                                                        </p>
+                                                        <p style={{
+                                                            fontSize: '24px',
+                                                            fontWeight: 'bold',
+                                                            color: COLORS.error
+                                                        }}>
+                                                            {data.taxa.toFixed(2)}%
+                                                        </p>
+                                                        <p style={{
+                                                            fontSize: '12px',
+                                                            color: isDarkMode ? '#94a3b8' : '#64748b',
+                                                            marginTop: '4px'
+                                                        }}>
+                                                            {data.productDaysWithImpact} de {data.totalProductDays} produtos impactados
+                                                        </p>
+                                                        <p style={{
+                                                            fontSize: '11px',
+                                                            color: isDarkMode ? '#64748b' : '#94a3b8',
+                                                            marginTop: '2px'
+                                                        }}>
+                                                            {data.totalImpacts} {data.totalImpacts === 1 ? 'ocorrência' : 'ocorrências'} registrada{data.totalImpacts === 1 ? '' : 's'}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Setor(es) Mais Prejudicado(s) */}
+                                                    <div style={{ marginBottom: '12px' }}>
+                                                        <p style={{
+                                                            fontSize: '11px',
+                                                            fontWeight: '600',
+                                                            color: isDarkMode ? '#94a3b8' : '#64748b',
+                                                            textTransform: 'uppercase',
+                                                            letterSpacing: '0.5px',
+                                                            marginBottom: '4px'
+                                                        }}>
+                                                            🏭 {data.mostAffectedSectors.length > 1 ? 'Setores Mais Prejudicados' : 'Setor Mais Prejudicado'}
+                                                        </p>
+                                                        <div style={{
+                                                            fontWeight: 'bold',
+                                                            fontSize: '14px',
+                                                            color: '#F97316',
+                                                            lineHeight: '1.2'
+                                                        }}>
+                                                            {data.mostAffectedSectors.join(', ')}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Produto(s) Mais Prejudicado(s) */}
+                                                    <div style={{ marginBottom: '12px' }}>
+                                                        <p style={{
+                                                            fontSize: '11px',
+                                                            fontWeight: '600',
+                                                            color: isDarkMode ? '#94a3b8' : '#64748b',
+                                                            textTransform: 'uppercase',
+                                                            letterSpacing: '0.5px',
+                                                            marginBottom: '4px'
+                                                        }}>
+                                                            📦 {data.mostAffectedProducts.length > 1 ? 'Produtos Mais Prejudicados' : 'Produto Mais Prejudicado'}
+                                                        </p>
+                                                        <div style={{
+                                                            fontWeight: 'bold',
+                                                            fontSize: '14px',
+                                                            color: '#8B5CF6',
+                                                            lineHeight: '1.2'
+                                                        }}>
+                                                            {data.mostAffectedProducts.map((product: string, index: number) => (
+                                                                <span key={index}>
+                                                                    {product}
+                                                                    {index < data.mostAffectedProducts.length - 1 ? ', ' : ''}
+                                                                </span>
+                                                            ))}
+                                                            <div style={{
+                                                                fontSize: '12px',
+                                                                fontWeight: 'normal',
+                                                                color: isDarkMode ? '#94a3b8' : '#64748b',
+                                                                marginTop: '2px'
+                                                            }}>
+                                                                ({data.mostAffectedProductCount} {data.mostAffectedProductCount === 1 ? 'ocorrência' : 'ocorrências'}{data.mostAffectedProducts.length > 1 ? ' cada' : ''})
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Ranking de Categorias */}
+                                                    {data.categoryBreakdown && data.categoryBreakdown.length > 0 && (
+                                                        <div>
+                                                            <p style={{
+                                                                fontSize: '11px',
+                                                                fontWeight: '600',
+                                                                color: isDarkMode ? '#94a3b8' : '#64748b',
+                                                                textTransform: 'uppercase',
+                                                                letterSpacing: '0.5px',
+                                                                marginBottom: '8px'
+                                                            }}>
+                                                                📊 Ranking por Categoria
+                                                            </p>
+                                                            <div style={{
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                gap: '6px'
+                                                            }}>
+                                                                {data.categoryBreakdown.map((cat: any, idx: number) => {
+                                                                    const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6'];
+                                                                    const color = colors[idx % colors.length];
+                                                                    return (
+                                                                        <div key={idx} style={{
+                                                                            display: 'flex',
+                                                                            justifyContent: 'space-between',
+                                                                            alignItems: 'center',
+                                                                            padding: '4px 8px',
+                                                                            backgroundColor: isDarkMode ? '#1e293b' : '#f8fafc',
+                                                                            borderRadius: '4px',
+                                                                            borderLeft: `3px solid ${color}`
+                                                                        }}>
+                                                                            <span style={{
+                                                                                fontSize: '13px',
+                                                                                fontWeight: '500',
+                                                                                color: color
+                                                                            }}>
+                                                                                {cat.category}
+                                                                            </span>
+                                                                            <span style={{
+                                                                                fontSize: '13px',
+                                                                                fontWeight: 'bold',
+                                                                                color: color
+                                                                            }}>
+                                                                                {cat.percentage.toFixed(1)}%
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+
+                                {/* Area com gradiente */}
+                                <Area
+                                    type="monotone"
+                                    dataKey="taxa"
+                                    fill="url(#impactRateGradient)"
+                                    stroke="none"
+                                    fillOpacity={1}
+                                    isAnimationActive={false}
+                                    legendType="none"
+                                />
+
+                                {/* Linha principal */}
+                                <Line
+                                    type="monotone"
+                                    dataKey="taxa"
+                                    stroke={COLORS.error}
+                                    strokeWidth={3}
+                                    name="Taxa %"
+                                    dot={false}
+                                    activeDot={{ r: 6, fill: '#fff', stroke: COLORS.error, strokeWidth: 2 }}
+                                    isAnimationActive={false}
+                                >
+                                    <LabelList
+                                        dataKey="taxa"
+                                        position="top"
+                                        formatter={(v: any) => `${formatChartNumber(Number(v))}%`}
+                                        style={{ fill: COLORS.error, fontSize: 16, fontWeight: 600 }}
+                                    />
+                                </Line>
+
+                                <Legend wrapperStyle={{ fontSize: '14px', zIndex: 1 }} iconType="circle" />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-gray-400">
+                            Nenhum dado disponível para exibir o gráfico
+                        </div>
+                    )}
+                </ChartContainer>
+
+                {/* Gráficos de Pizza em Grid 2 Colunas */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Placeholder para futuros gráficos */}
+                    <ChartContainer title="Impactos por Categoria">
+                        {impactsByCategoryData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={impactsByCategoryData}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={50}
+                                        outerRadius={80}
+                                        stroke={isDarkMode ? '#1e293b' : '#fff'}
+                                        label={({ name, value }) => `${name}: ${formatChartNumber(Number(value))}`}
+                                        labelLine={{ stroke: isDarkMode ? '#94a3b8' : '#64748b', strokeWidth: 1 }}
+                                    >
+                                        {impactsByCategoryData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS.pie[index % COLORS.pie.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        contentStyle={tooltipStyle}
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                const data = payload[0].payload;
+                                                return (
+                                                    <div style={{ ...tooltipStyle, padding: '10px', border: '1px solid #ccc' }}>
+                                                        <p style={{ fontWeight: 'bold' }}>{data.name}</p>
+                                                        <p>Impactos: {data.value}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Legend wrapperStyle={{ fontSize: '14px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-400">
+                                Nenhum impacto registrado para exibir o gráfico
+                            </div>
+                        )}
+                    </ChartContainer>
+
+                    <ChartContainer title="Impactos por Setor">
+                        {impactsBySectorData.length > 0 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={impactsBySectorData}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={50}
+                                        outerRadius={80}
+                                        stroke={isDarkMode ? '#1e293b' : '#fff'}
+                                        label={({ name, value }) => `${name}: ${formatChartNumber(Number(value))}`}
+                                        labelLine={{ stroke: isDarkMode ? '#94a3b8' : '#64748b', strokeWidth: 1 }}
+                                    >
+                                        {impactsBySectorData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS.pie[index % COLORS.pie.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip
+                                        contentStyle={tooltipStyle}
+                                        content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                                const data = payload[0].payload;
+                                                return (
+                                                    <div style={{ ...tooltipStyle, padding: '10px', border: '1px solid #ccc' }}>
+                                                        <p style={{ fontWeight: 'bold' }}>{data.name}</p>
+                                                        <p>Impactos: {data.value}</p>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        }}
+                                    />
+                                    <Legend wrapperStyle={{ fontSize: '14px' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-400">
+                                Nenhum impacto registrado para exibir o gráfico
+                            </div>
+                        )}
+                    </ChartContainer>
+                </div>
+            </div>
         </div>
     );
 
@@ -1422,11 +1958,17 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 </div>
                 {canCreate() && (
                     <div className="flex items-center gap-2">
-                        <button onClick={() => setIsBulkModalOpen(true)} className="flex items-center justify-center bg-imac-primary text-white px-4 py-2 rounded-lg hover:opacity-90 transition font-semibold">
+                        <button
+                            onClick={() => setIsBulkModalOpen(true)}
+                            className="flex items-center justify-center bg-imac-primary text-white px-4 py-2 rounded-lg hover:opacity-90 transition font-semibold"
+                        >
                             <Plus size={20} className="mr-2" />
                             Registro Geral
                         </button>
-                        <button onClick={() => handleOpenModal()} className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-semibold">
+                        <button
+                            onClick={() => handleOpenModal()}
+                            className="flex items-center justify-center bg-imac-success text-white px-4 py-2 rounded-lg hover:bg-green-600 transition font-semibold"
+                        >
                             <Plus size={20} className="mr-2" />
                             Registro Individual
                         </button>
@@ -1468,87 +2010,345 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 transition-colors">
+            <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><List size={20} />Registros de Produção</h3>
-                <div className="overflow-x-auto w-full">
-                    <div className="min-w-[800px]">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50/50 dark:bg-slate-700/50">
-                                <tr>
-                                    <th className="px-6 py-3">Mês/Ano</th>
-                                    <th className="px-6 py-3">Setor</th>
-                                    <th className="px-6 py-3">Produto</th>
-                                    <th className="px-6 py-3 text-center">Meta Mês</th>
-                                    <th className="px-6 py-3 text-center">QTD POR SEMANA</th>
-                                    <th className="px-6 py-3 text-center">Programado</th>
-                                    <th className="px-6 py-3 text-center">Realizado</th>
-                                    <th className="px-6 py-3 text-center">QTD. EM KG/UND</th>
-                                    <th className="px-6 py-3 text-center">Velocidade %</th>
-                                    <th className="px-6 py-3 text-center no-print">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-gray-600 dark:text-gray-300">
-                                {filteredTableRecords.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={9} className="text-center py-10 text-gray-400">Nenhum registro encontrado</td>
-                                    </tr>
-                                ) : filteredTableRecords.map(rec => (
-                                    <tr key={rec.id} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                                        <td className="px-6 py-4">{rec.mesAno}</td>
-                                        <td className="px-6 py-4">{rec.sector}</td>
-                                        <td className="px-6 py-4 font-medium text-gray-800 dark:text-gray-100">{rec.produto}</td>
-                                        <td className="px-6 py-4 text-center">{rec.metaMes}</td>
-                                        <td className="px-6 py-4 text-center font-medium text-gray-600 dark:text-gray-300">
-                                            {(() => {
-                                                const [m, y] = rec.mesAno.split('/');
-                                                // Dia 0 do próximo mês retorna o último dia do mês atual
-                                                const daysInMonth = new Date(Number(y), Number(m), 0).getDate();
 
-                                                // Conta segundas-feiras para estimar semanas de produção
-                                                let weeks = 0;
-                                                for (let d = 1; d <= daysInMonth; d++) {
-                                                    const day = new Date(Number(y), Number(m) - 1, d).getDay();
-                                                    if (day === 1) weeks++; // Conta segundas-feiras
-                                                }
-                                                // Fallback para 4 se algo der errado ou se for um mês atípico de produção
-                                                if (weeks < 4) weeks = 4;
+                {groupedRecords.length === 0 ? (
+                    <div className="bg-white dark:bg-slate-800 p-10 rounded-xl shadow-lg border border-dashed border-gray-300 dark:border-slate-700 text-center">
+                        <p className="text-gray-400 text-lg">Nenhum registro encontrado para os filtros selecionados.</p>
+                    </div>
+                ) : (
+                    groupedRecords.map(([mesAno, groupRecords]) => {
+                        const isOpen = openMonths.includes(mesAno);
+                        const label = formatMonthYear(mesAno);
 
-                                                const weeklyMeta = rec.metaMes / weeks;
-                                                return Math.round(weeklyMeta).toLocaleString();
-                                            })()}
-                                        </td>
-                                        <td className="px-6 py-4 text-center">{rec.totalProgramado}</td>
-                                        <td className="px-6 py-4 text-center">{rec.totalRealizado}</td>
-                                        <td className="px-6 py-4 text-center">
-                                            {rec.totalRealizadoKgUnd ? (() => {
-                                                const decimals = rec.totalRealizadoKgUnd % 1 === 0 ? 0 : 2;
-                                                return `${rec.totalRealizadoKgUnd.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: 2 })} ${rec.unit || 'UND'}`;
-                                            })() : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 font-semibold text-center">{rec.velocidade.toFixed(1)}%</td>
-                                        <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
-                                            <button type="button" onClick={() => handleViewRecord(rec)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
-                                                <Eye size={18} />
+                        return (
+                            <div key={mesAno} className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200/60 dark:border-slate-700/60 overflow-hidden transition-all duration-300">
+                                {/* Header (Retângulo/Cabeçalho) */}
+                                <div
+                                    className={`
+                                        flex items-center justify-between p-4 transition-colors border-l-4
+                                        ${isOpen
+                                            ? 'bg-imac-primary/5 dark:bg-slate-700/50 border-imac-primary border-b border-b-imac-primary/10'
+                                            : 'hover:bg-gray-50 dark:hover:bg-slate-700/30 border-transparent'}
+                                    `}
+                                >
+                                    <div
+                                        onClick={() => toggleMonth(mesAno)}
+                                        className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                    >
+                                        <div className={`p-2 rounded-lg ${isOpen ? 'bg-imac-primary text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
+                                            <Calendar size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className={`text-lg font-bold ${isOpen ? 'text-imac-primary' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                {label}
+                                            </h4>
+                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                {groupRecords.length} registro{groupRecords.length !== 1 ? 's' : ''}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {canDelete() && !isEspectador() && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteMonthClick(mesAno, groupRecords.map(r => r.id));
+                                                }}
+                                                className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors no-print"
+                                                title={`Excluir todos os ${groupRecords.length} registros de ${label}`}
+                                            >
+                                                <Trash2 size={18} />
                                             </button>
-                                            {!isEspectador() && (
-                                                <>
-                                                    {canEdit() && (
-                                                        <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
-                                                    )}
-                                                    {canDelete() && (
-                                                        <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                                                    )}
-                                                </>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        )}
+                                        <div
+                                            onClick={() => toggleMonth(mesAno)}
+                                            className={`transform transition-transform duration-300 cursor-pointer p-2 ${isOpen ? 'rotate-180 text-imac-primary' : 'text-gray-400'}`}
+                                        >
+                                            <ChevronDown size={24} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Body (Gaveta/Tabela) */}
+                                {isOpen && (
+                                    <div className="animate-fadeIn">
+                                        <div className="overflow-x-auto w-full">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50/50 dark:bg-slate-700/50">
+                                                    <tr>
+                                                        <th className="px-6 py-3">Setor</th>
+                                                        <th className="px-6 py-3">Produto</th>
+                                                        <th className="px-6 py-3 text-center">Meta Mês</th>
+                                                        <th className="px-6 py-3 text-center">QTD/Semana</th>
+                                                        <th className="px-6 py-3 text-center">Programado</th>
+                                                        <th className="px-6 py-3 text-center">Realizado</th>
+                                                        <th className="px-6 py-3 text-center">QTD. (KG/UND)</th>
+                                                        <th className="px-6 py-3 text-center">Velocidade %</th>
+                                                        <th className="px-6 py-3 text-center no-print">Ações</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="text-gray-700 dark:text-gray-400 border-t dark:border-slate-700">
+                                                    {groupRecords.map(rec => (
+                                                        <tr key={rec.id} className="border-b dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                                                            <td className="px-6 py-4 uppercase">{rec.sector}</td>
+                                                            <td className="px-6 py-4 font-bold text-slate-700 dark:text-gray-200 uppercase">{rec.produto}</td>
+                                                            <td className="px-6 py-4 text-center">{rec.metaMes}</td>
+                                                            <td className="px-6 py-4 text-center font-medium text-gray-700 dark:text-gray-400">
+                                                                {(() => {
+                                                                    const [m, y] = rec.mesAno.split('/');
+                                                                    const daysInMonth = new Date(Number(y), Number(m), 0).getDate();
+                                                                    let weeks = 0;
+                                                                    for (let d = 1; d <= daysInMonth; d++) {
+                                                                        const day = new Date(Number(y), Number(m) - 1, d).getDay();
+                                                                        if (day === 1) weeks++;
+                                                                    }
+                                                                    if (weeks < 4) weeks = 4;
+                                                                    const weeklyMeta = rec.metaMes / weeks;
+                                                                    return Math.round(weeklyMeta).toLocaleString();
+                                                                })()}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">{rec.totalProgramado}</td>
+                                                            <td className="px-6 py-4 text-center">{rec.totalRealizado}</td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                {rec.totalRealizadoKgUnd ? (() => {
+                                                                    const decimals = rec.totalRealizadoKgUnd % 1 === 0 ? 0 : 2;
+                                                                    return `${rec.totalRealizadoKgUnd.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: 2 })} ${rec.unit || 'UND'}`;
+                                                                })() : '-'}
+                                                            </td>
+                                                            <td className="px-6 py-4 font-semibold text-center">
+                                                                <span className={`
+                                                                    px-2 py-1 rounded-full text-xs
+                                                                    ${rec.velocidade >= 100 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                                                        rec.velocidade >= 90 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                                                                            rec.velocidade >= 80 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                                                                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}
+                                                                `}>
+                                                                    {rec.velocidade.toFixed(1)}%
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 flex justify-center items-center gap-2 no-print">
+                                                                <button type="button" onClick={() => handleViewRecord(rec)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                                                    <Eye size={18} />
+                                                                </button>
+                                                                {!isEspectador() && (
+                                                                    <>
+                                                                        {canEdit() && (
+                                                                            <button type="button" onClick={() => handleOpenModal(rec)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                                        )}
+                                                                        {canDelete() && (
+                                                                            <button type="button" onClick={() => handleDeleteClick(rec.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                                        )}
+                                                                    </>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+        </div>
+    );
+
+    const renderObservations = () => (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 no-print">
+                <div className="flex items-center gap-2">
+                    <button onClick={handleExportObservationsXLSX} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-green-600 dark:border-green-700 text-green-700 dark:text-green-400 px-4 py-2 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/30 transition text-sm font-medium">
+                        <File size={16} /> Exportar XLSX
+                    </button>
+                    <button onClick={handleExportObservationsPDF} className="flex items-center gap-2 bg-white dark:bg-slate-700 border border-red-600 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition text-sm font-medium">
+                        <File size={16} /> Exportar PDF
+                    </button>
+                </div>
+                {canCreate() && (
+                    <button
+                        onClick={() => handleOpenObservationModal()}
+                        className="flex items-center justify-center bg-imac-primary text-white px-4 py-2 rounded-lg hover:opacity-90 transition font-semibold"
+                    >
+                        <Plus size={20} className="mr-2" />
+                        Nova Observação
+                    </button>
+                )}
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg dark:shadow-xl border border-slate-200/50 dark:border-slate-700/50 space-y-4 no-print transition-colors">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Mês/Ano</label>
+                        <DatePickerInput
+                            value={observationFilters.date}
+                            type="month"
+                            onChange={(date) => setObservationFilters({ ...observationFilters, date })}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Setor</label>
+                        <select
+                            value={observationFilters.sector}
+                            onChange={(e) => setObservationFilters({ ...observationFilters, sector: e.target.value })}
+                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        >
+                            <option value="Todos">Todos</option>
+                            {Object.values(Sector).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Produto</label>
+                        <input
+                            type="text"
+                            placeholder="Buscar produto..."
+                            value={observationFilters.product}
+                            onChange={(e) => setObservationFilters({ ...observationFilters, product: e.target.value })}
+                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Tipo</label>
+                        <input
+                            type="text"
+                            placeholder="Buscar tipo..."
+                            value={observationFilters.observationType}
+                            onChange={(e) => setObservationFilters({ ...observationFilters, observationType: e.target.value })}
+                            className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
+                        />
                     </div>
                 </div>
             </div>
-        </div>
+
+            <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-imac-tertiary dark:text-imac-primary mb-4 flex items-center gap-2"><FileText size={20} />Observações Registradas</h3>
+
+                {groupedObservations.length === 0 ? (
+                    <div className="bg-white dark:bg-slate-800 p-10 rounded-xl shadow-lg border border-dashed border-gray-300 dark:border-slate-700 text-center">
+                        <p className="text-gray-400 text-lg">Nenhuma observação encontrada para os filtros selecionados.</p>
+                    </div>
+                ) : (
+                    groupedObservations.map(([dateKey, groupObservations]) => {
+                        const isOpen = openObservationDates.includes(dateKey);
+                        const label = formatObservationDate(dateKey);
+
+                        return (
+                            <div key={dateKey} className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200/60 dark:border-slate-700/60 overflow-hidden transition-all duration-300">
+                                {/* Header */}
+                                <div
+                                    className={`
+                                        flex items-center justify-between p-4 transition-colors border-l-4
+                                        ${isOpen
+                                            ? 'bg-imac-primary/5 dark:bg-slate-700/50 border-imac-primary border-b border-b-imac-primary/10'
+                                            : 'hover:bg-gray-50 dark:hover:bg-slate-700/30 border-transparent'}
+                                    `}
+                                >
+                                    <div
+                                        onClick={() => toggleObservationDate(dateKey)}
+                                        className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                    >
+                                        <div className={`p-2 rounded-lg ${isOpen ? 'bg-imac-primary text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
+                                            <Calendar size={20} />
+                                        </div>
+                                        <div>
+                                            <h4 className={`text-lg font-bold ${isOpen ? 'text-imac-primary' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                {label}
+                                            </h4>
+                                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                {groupObservations.length} {groupObservations.length !== 1 ? 'observações' : 'observação'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {canDelete() && !isEspectador() && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteObservationDateClick(dateKey, groupObservations.map(o => o.id));
+                                                }}
+                                                className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors no-print"
+                                                title={`Excluir todas as ${groupObservations.length} observações de ${label}`}
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        )}
+                                        <div
+                                            onClick={() => toggleObservationDate(dateKey)}
+                                            className={`transform transition-transform duration-300 cursor-pointer p-2 ${isOpen ? 'rotate-180 text-imac-primary' : 'text-gray-400'}`}
+                                        >
+                                            <ChevronDown size={24} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Body */}
+                                {isOpen && (
+                                    <div className="animate-fadeIn">
+                                        <div className="overflow-x-auto w-full">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50/50 dark:bg-slate-700/50">
+                                                    <tr>
+                                                        <th className="px-6 py-3">Setor</th>
+                                                        <th className="px-6 py-3">Produto</th>
+                                                        <th className="px-6 py-3">Tipo</th>
+                                                        <th className="px-6 py-3">Descrição</th>
+                                                        <th className="px-6 py-3">Houve Impacto?</th>
+                                                        <th className="px-6 py-3 text-center">Ações</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                                                    {groupObservations.map((obs) => (
+                                                        <tr key={obs.id} className="bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                            <td className="px-6 py-4 text-gray-700 dark:text-gray-400 uppercase">
+                                                                {Sector[obs.sector as keyof typeof Sector] || obs.sector}
+                                                            </td>
+                                                            <td className="px-6 py-4 font-bold text-slate-700 dark:text-gray-200 uppercase">
+                                                                {obs.product || '-'}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-gray-700 dark:text-gray-300">
+                                                                {obs.observationType}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-gray-700 dark:text-gray-400 max-w-xs truncate" title={obs.description}>
+                                                                {obs.description}
+                                                            </td>
+                                                            <td className="px-6 py-4 text-left">
+                                                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${obs.hadImpact ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'}`}>
+                                                                    {obs.hadImpact ? 'SIM' : 'NÃO'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center flex justify-center gap-2 no-print">
+                                                                <button type="button" onClick={() => handleViewObservation(obs)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Visualizar">
+                                                                    <Eye size={18} />
+                                                                </button>
+                                                                {!isEspectador() && (
+                                                                    <>
+                                                                        {canEdit() && (
+                                                                            <button type="button" onClick={() => handleOpenObservationModal(obs)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" title="Editar"><Pencil size={18} /></button>
+                                                                        )}
+                                                                        {canDelete() && (
+                                                                            <button type="button" onClick={() => handleDeleteObservationClick(obs.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" title="Excluir"><Trash2 size={18} /></button>
+                                                                        )}
+                                                                    </>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )
+                                }
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+        </div >
     );
 
     return (
@@ -1629,11 +2429,12 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 message={`Tem certeza que deseja excluir TODOS os ${deleteMonthData?.recordIds.length || 0} registros de ${deleteMonthData ? formatMonthYear(deleteMonthData.mesAno) : ''}? Esta ação não pode ser desfeita.`}
             />
 
-            <BulkRegistrationModal
-                isOpen={isBulkModalOpen}
-                onClose={() => setIsBulkModalOpen(false)}
-                onConfirm={handleBulkRegistration}
-                products={products}
+            <ConfirmModal
+                isOpen={!!deleteObservationDateData}
+                onClose={() => setDeleteObservationDateData(null)}
+                onConfirm={confirmDeleteObservationDate}
+                title={`Excluir Todas as Observações de ${deleteObservationDateData ? formatObservationDate(deleteObservationDateData.date) : ''}`}
+                message={`Tem certeza que deseja excluir TODAS as ${deleteObservationDateData?.observationIds.length || 0} observações de ${deleteObservationDateData ? formatObservationDate(deleteObservationDateData.date) : ''}? Esta ação não pode ser desfeita.`}
             />
 
             <ViewModal
@@ -1642,6 +2443,13 @@ const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, se
                 title={viewTitle}
                 data={viewData}
                 fields={viewFields}
+            />
+
+            <BulkRegistrationModal
+                isOpen={isBulkModalOpen}
+                onClose={() => setIsBulkModalOpen(false)}
+                onConfirm={handleBulkRegistration}
+                products={products}
             />
 
         </div>

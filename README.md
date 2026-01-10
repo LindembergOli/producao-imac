@@ -79,7 +79,6 @@ imac-congelados/
 │   │   ├── app.js        # Configuração Express
 │   │   └── server.js     # Entry point
 │   ├── prisma/           # Schema e migrações
-│   └── tests/            # Testes automatizados
 │
 ├── frontend/             # React App
 │   ├── src/
@@ -90,7 +89,6 @@ imac-congelados/
 │   │   ├── hooks/        # Custom hooks
 │   │   ├── types/        # TypeScript types
 │   │   └── utils/        # Utilitários
-│   └── tests/            # Testes de componentes
 │
 ├── infra/                # Infraestrutura
 │   ├── docker/           # Docker Compose
@@ -104,7 +102,6 @@ imac-congelados/
     ├── DATA_GOVERNANCE.md
     ├── DEPLOYMENT.md
     ├── DEVELOPMENT.md
-    ├── DOCKER_QUICKSTART.md
     ├── FRONTEND.md
     ├── SECURITY.md
     └── TROUBLESHOOTING.md
@@ -708,7 +705,6 @@ Antes de colocar em produção, verifique:
 - [ ] README atualizado
 - [ ] API documentada
 - [ ] Runbook de operações criado
-- [ ] Plano de disaster recovery definido
 
 ---
 
@@ -718,9 +714,7 @@ Antes de colocar em produção, verifique:
 - [Guia do Backend](docs/BACKEND.md)
 - [Guia do Frontend](docs/FRONTEND.md)
 - [Guia do Banco de Dados](docs/DATABASE_GUIDE.md)
-- [Disaster Recovery](docs/DISASTER_RECOVERY.md)
 - [Docker - Guia Completo](infra/docker/README.md)
-- [Docker - Início Rápido](DOCKER_QUICKSTART.md)
 
 ---
 
@@ -731,25 +725,3 @@ Antes de colocar em produção, verifique:
 3. Commit suas mudanças (`git commit -m 'feat: adiciona nova funcionalidade'`)
 4. Push para a branch (`git push origin feature/nova-funcionalidade`)
 5. Abra um Pull Request
-
----
-
-## 📄 Licença
-
-MIT License - veja [LICENSE](LICENSE) para detalhes.
-
----
-
-## 👥 Equipe
-
-**IMAC Congelados** - Sistema de Controle de Produção
-
----
-
-## 📞 Suporte
-
-Para dúvidas ou problemas:
-- Abra uma [Issue](https://github.com/LindembergOli/PROD-IMAC/issues)
-- Consulte a [Documentação](docs/)
-- Entre em contato com a equipe de desenvolvimento
-

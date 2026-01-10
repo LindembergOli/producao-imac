@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Users, Pencil, Trash2, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Users, Pencil, Trash2, FileSpreadsheet, FileText, ChevronDown, Briefcase, Eye } from 'lucide-react';
 import type { Employee } from '../types';
 import { Sector, Unit, LossType, ErrorCategory, MaintenanceStatus, AbsenceType } from '../types';
 import * as XLSX from 'xlsx';
@@ -12,7 +12,6 @@ import { employeesService } from '../services/modules/employees';
 import { useAuth } from '../contexts/AuthContext';
 import { getVisibleSectors } from '../utils/sectorUtils';
 import ViewModal from '../components/ViewModal';
-import { Eye } from 'lucide-react';
 import { formatText } from '../utils/formatters';
 
 /**
@@ -132,6 +131,13 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
         role: ''
     });
 
+    // Estados para controle de accordions (agrupamento por setor)
+    const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
+
+    // Estado para exclusão em massa de registros por setor
+    const [deleteSectorData, setDeleteSectorData] = useState<{ sector: string; employeeIds: number[] } | null>(null);
+
+
     // Filtra e ordena a lista de funcionários com base nos filtros e permissões
     const filteredAndSortedEmployees = useMemo(() => {
         if (!Array.isArray(employees)) return [];
@@ -158,6 +164,28 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
 
         return [...filtered].sort((a, b) => a.sector.localeCompare(b.sector));
     }, [employees, user?.role, filters]);
+
+    // Agrupar funcionários filtrados por setor para exibição em accordions
+    const groupedEmployees = useMemo(() => {
+        const groups: Record<string, Employee[]> = {};
+        filteredAndSortedEmployees.forEach(emp => {
+            const sector = emp.sector;
+            if (!groups[sector]) groups[sector] = [];
+            groups[sector].push(emp);
+        });
+        return groups;
+    }, [filteredAndSortedEmployees]);
+
+    // Abrir automaticamente o primeiro accordion ao carregar os dados
+    React.useEffect(() => {
+        const sectors = Object.keys(groupedEmployees);
+        if (sectors.length > 0 && Object.keys(openAccordions).length === 0) {
+            const firstSector = sectors[0];
+            if (firstSector) {
+                setOpenAccordions({ [firstSector]: true });
+            }
+        }
+    }, [groupedEmployees]);
 
     const clearFilters = () => {
         setFilters({ sector: '', name: '', role: '' });
@@ -220,6 +248,48 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
     const handleDeleteClick = (id: number) => {
         setDeleteId(id);
     };
+
+    // Alternar estado de abertura/fechamento de um accordion específico
+    const toggleAccordion = (sector: string) => {
+        setOpenAccordions(prev => ({ ...prev, [sector]: !prev[sector] }));
+    };
+
+    // Preparar dados para exclusão em massa de todos os funcionários de um setor
+    const handleDeleteSectorClick = (sector: string, ids: number[]) => {
+        setDeleteSectorData({ sector, employeeIds: ids });
+    };
+
+    // Confirmar e executar exclusão em massa de funcionários por setor
+    const confirmDeleteSector = async () => {
+        if (!deleteSectorData) return;
+
+        let deleted = 0;
+        let errors = 0;
+
+        // Deletar cada funcionário individualmente
+        for (const id of deleteSectorData.employeeIds) {
+            try {
+                await employeesService.delete(id);
+                deleted++;
+            } catch (error) {
+                console.error(`Erro ao deletar funcionário ${id}`, error);
+                errors++;
+            }
+        }
+
+        // Recarregar funcionários atualizados do backend
+        const updatedEmployees = await employeesService.getAll();
+        setEmployees(updatedEmployees);
+        setDeleteSectorData(null);
+
+        // Exibir resultado da operação
+        if (errors === 0) {
+            alert(`✅ ${deleted} funcionários excluídos com sucesso!`);
+        } else {
+            alert(`⚠️ ${deleted} excluídos. ${errors} erros.`);
+        }
+    };
+
 
     const handleExportXLSX = () => {
         if (!Array.isArray(employees) || employees.length === 0) {
@@ -347,51 +417,118 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                     Lista de Funcionários ({filteredAndSortedEmployees.length})
                 </h2>
 
-                <div className="overflow-x-auto">
-                    <div className="min-w-[800px] align-middle">
-                        {/* Header - Estilo padronizado com Máquinas/Produtos */}
-                        <div className="grid grid-cols-10 gap-4 px-4 py-3 bg-imac-secondary/20 dark:bg-slate-700/50 rounded-lg">
-                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
-                            <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
-                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Cargo</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
+                {/* Container principal dos accordions agrupados por setor */}
+                <div className="space-y-4">
+                    {Object.entries(groupedEmployees).length === 0 ? (
+                        <div className="text-center py-16 text-gray-400">
+                            <div className="flex flex-col items-center justify-center">
+                                <Users size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
+                                <p>{filters.sector || filters.name || filters.role ? 'Nenhum funcionário encontrado com os filtros aplicados' : 'Nenhum funcionário cadastrado'}</p>
+                            </div>
                         </div>
+                    ) : (
+                        Object.entries(groupedEmployees)
+                            .sort(([a], [b]) => a.localeCompare(b)) // Ordenar por setor alfabeticamente
+                            .map(([sector, sectorEmployees]) => {
+                                const isOpen = openAccordions[sector] || false;
 
-                        {/* Body */}
-                        <div className="mt-2">
-                            {filteredAndSortedEmployees.length === 0 ? (
-                                <div className="text-center py-16 text-gray-400">
-                                    <div className="flex flex-col items-center justify-center">
-                                        <Users size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
-                                        <p>{filters.sector || filters.name || filters.role ? 'Nenhum funcionário encontrado com os filtros aplicados' : 'Nenhum funcionário cadastrado'}</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                filteredAndSortedEmployees.map((emp) => (
-                                    <div key={emp.id} className="grid grid-cols-10 gap-4 items-center px-4 py-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                                        <div className="col-span-3 text-gray-600 dark:text-gray-300">{emp.sector}</div>
-                                        <div className="col-span-4 font-medium text-gray-800 dark:text-gray-100">{emp.name}</div>
-                                        <div className="col-span-2 text-gray-600 dark:text-gray-400">{emp.role || '-'}</div>
-                                        <div className="col-span-1 flex justify-center items-center gap-2 no-print">
-                                            <button type="button" onClick={() => handleView(emp)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" aria-label="Visualizar" title="Visualizar">
-                                                <Eye size={18} />
-                                            </button>
-                                            {!isEspectador() && (
-                                                <>
-                                                    <button type="button" onClick={() => handleOpenModal(emp)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label="Editar" title="Editar">
-                                                        <Pencil size={18} />
-                                                    </button>
-                                                    <button type="button" onClick={() => handleDeleteClick(emp.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label="Excluir" title="Excluir">
+                                return (
+                                    <div key={sector} className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200/60 dark:border-slate-700/60 overflow-hidden transition-all duration-300">
+                                        {/* Cabeçalho do Accordion */}
+                                        <div
+                                            className={`
+                                                flex items-center justify-between p-4 transition-colors border-l-4
+                                                ${isOpen
+                                                    ? 'bg-imac-primary/5 dark:bg-slate-700/50 border-imac-primary border-b border-b-imac-primary/10'
+                                                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/30 border-transparent'}
+                                            `}
+                                        >
+                                            <div
+                                                onClick={() => toggleAccordion(sector)}
+                                                className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                            >
+                                                <div className={`p-2 rounded-lg ${isOpen ? 'bg-imac-primary text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
+                                                    <Briefcase size={20} />
+                                                </div>
+                                                <div>
+                                                    <h4 className={`text-lg font-bold ${isOpen ? 'text-imac-primary' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                        {sector}
+                                                    </h4>
+                                                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                        {sectorEmployees.length} {sectorEmployees.length !== 1 ? 'funcionários' : 'funcionário'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {/* Botão de exclusão em massa (apenas se usuário tiver permissão) */}
+                                                {!isEspectador() && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSectorClick(sector, sectorEmployees.map(emp => emp.id));
+                                                        }}
+                                                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors no-print"
+                                                        title={`Excluir todos os ${sectorEmployees.length} funcionários do setor ${sector}`}
+                                                    >
                                                         <Trash2 size={18} />
                                                     </button>
-                                                </>
-                                            )}
+                                                )}
+                                                {/* Ícone de expansão/colapso */}
+                                                <div
+                                                    onClick={() => toggleAccordion(sector)}
+                                                    className={`transform transition-transform duration-300 cursor-pointer p-2 ${isOpen ? 'rotate-180 text-imac-primary' : 'text-gray-400'}`}
+                                                >
+                                                    <ChevronDown size={24} />
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        {/* Corpo do Accordion (lista de funcionários) */}
+                                        {isOpen && (
+                                            <div className="animate-fadeIn">
+                                                <div className="overflow-x-auto w-full">
+                                                    <div className="min-w-[800px] align-middle">
+                                                        {/* Header */}
+                                                        <div className="grid grid-cols-10 gap-4 px-4 py-3 bg-imac-secondary/20 dark:bg-slate-700/50">
+                                                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
+                                                            <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
+                                                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Cargo</div>
+                                                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
+                                                        </div>
+
+                                                        {/* Body */}
+                                                        <div className="divide-y divide-gray-100 dark:divide-slate-700">
+                                                            {sectorEmployees.map((emp) => (
+                                                                <div key={emp.id} className="grid grid-cols-10 gap-4 items-center px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                                                                    <div className="col-span-3 text-gray-700 dark:text-gray-400 uppercase">{emp.sector}</div>
+                                                                    <div className="col-span-4 font-bold text-slate-700 dark:text-gray-200 uppercase">{emp.name}</div>
+                                                                    <div className="col-span-2 text-gray-700 dark:text-gray-400">{emp.role || '-'}</div>
+                                                                    <div className="col-span-1 flex justify-center items-center gap-2 no-print">
+                                                                        <button type="button" onClick={() => handleView(emp)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" aria-label="Visualizar" title="Visualizar">
+                                                                            <Eye size={18} />
+                                                                        </button>
+                                                                        {!isEspectador() && (
+                                                                            <>
+                                                                                <button type="button" onClick={() => handleOpenModal(emp)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label="Editar" title="Editar">
+                                                                                    <Pencil size={18} />
+                                                                                </button>
+                                                                                <button type="button" onClick={() => handleDeleteClick(emp.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label="Excluir" title="Excluir">
+                                                                                    <Trash2 size={18} />
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                                );
+                            })
+                    )}
                 </div>
             </main>
 
@@ -425,6 +562,15 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                     { label: 'Nome', key: 'name' },
                     { label: 'Cargo', key: 'role' }
                 ]}
+            />
+
+            {/* Modal de confirmação para exclusão em massa de funcionários por setor */}
+            <ConfirmModal
+                isOpen={!!deleteSectorData}
+                onClose={() => setDeleteSectorData(null)}
+                onConfirm={confirmDeleteSector}
+                title="Excluir Funcionários do Setor"
+                message={`Tem certeza que deseja excluir todos os ${deleteSectorData?.employeeIds.length || 0} funcionários do setor ${deleteSectorData?.sector || ''}? Esta ação não pode ser desfeita.`}
             />
         </div>
     );

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { sanitizeFormInput } from '../utils/sanitize';
-import { Plus, Package, Pencil, Trash2, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, Package, Pencil, Trash2, FileSpreadsheet, FileText, ChevronDown, Briefcase, Eye } from 'lucide-react';
 import type { Product } from '../types';
 import { Sector, Unit, LossType, ErrorCategory, MaintenanceStatus, AbsenceType } from '../types';
 import * as XLSX from 'xlsx';
@@ -11,7 +11,6 @@ import Modal, { ConfirmModal } from '../components/Modal';
 import { productsService } from '../services/modules/products';
 import { useAuth } from '../contexts/AuthContext';
 import ViewModal from '../components/ViewModal';
-import { Eye } from 'lucide-react';
 import { formatText } from '../utils/formatters';
 
 interface ProductsProps {
@@ -178,6 +177,13 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
         name: ''
     });
 
+    // Estados para controle de accordions (agrupamento por setor)
+    const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
+
+    // Estado para exclusão em massa de registros por setor
+    const [deleteSectorData, setDeleteSectorData] = useState<{ sector: string; productIds: number[] } | null>(null);
+
+
     // Filtra e ordena produtos baseado nos critérios selecionados
     const filteredAndSortedProducts = useMemo(() => {
         if (!products || !Array.isArray(products)) return [];
@@ -196,6 +202,28 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
 
         return filtered.sort((a, b) => a.sector.localeCompare(b.sector));
     }, [products, filters]);
+
+    // Agrupar produtos filtrados por setor para exibição em accordions
+    const groupedProducts = useMemo(() => {
+        const groups: Record<string, Product[]> = {};
+        filteredAndSortedProducts.forEach(prod => {
+            const sector = prod.sector;
+            if (!groups[sector]) groups[sector] = [];
+            groups[sector].push(prod);
+        });
+        return groups;
+    }, [filteredAndSortedProducts]);
+
+    // Abrir automaticamente o primeiro accordion ao carregar os dados
+    React.useEffect(() => {
+        const sectors = Object.keys(groupedProducts);
+        if (sectors.length > 0 && Object.keys(openAccordions).length === 0) {
+            const firstSector = sectors[0];
+            if (firstSector) {
+                setOpenAccordions({ [firstSector]: true });
+            }
+        }
+    }, [groupedProducts]);
 
     const clearFilters = () => {
         setFilters({ sector: '', name: '' });
@@ -256,6 +284,48 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
     const handleDeleteClick = (id: number) => {
         setDeleteId(id);
     };
+
+    // Alternar estado de abertura/fechamento de um accordion específico
+    const toggleAccordion = (sector: string) => {
+        setOpenAccordions(prev => ({ ...prev, [sector]: !prev[sector] }));
+    };
+
+    // Preparar dados para exclusão em massa de todos os produtos de um setor
+    const handleDeleteSectorClick = (sector: string, ids: number[]) => {
+        setDeleteSectorData({ sector, productIds: ids });
+    };
+
+    // Confirmar e executar exclusão em massa de produtos por setor
+    const confirmDeleteSector = async () => {
+        if (!deleteSectorData) return;
+
+        let deleted = 0;
+        let errors = 0;
+
+        // Deletar cada produto individualmente
+        for (const id of deleteSectorData.productIds) {
+            try {
+                await productsService.delete(id);
+                deleted++;
+            } catch (error) {
+                console.error(`Erro ao deletar produto ${id}`, error);
+                errors++;
+            }
+        }
+
+        // Recarregar produtos atualizados do backend
+        const updatedProducts = await productsService.getAll();
+        setProducts(updatedProducts);
+        setDeleteSectorData(null);
+
+        // Exibir resultado da operação
+        if (errors === 0) {
+            alert(`✅ ${deleted} produtos excluídos com sucesso!`);
+        } else {
+            alert(`⚠️ ${deleted} excluídos. ${errors} erros.`);
+        }
+    };
+
 
     const handleExportXLSX = () => {
         if (!Array.isArray(products) || products.length === 0) {
@@ -373,55 +443,124 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                     Lista de Produtos ({filteredAndSortedProducts.length})
                 </h2>
 
-                <div className="overflow-x-auto">
-                    <div className="min-w-[1000px] align-middle">
-                        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-imac-secondary/20 dark:bg-slate-700/50 rounded-lg">
-                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
-                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Unidade</div>
-                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Rendimento</div>
-                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Custo por Receita</div>
-                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
+                {/* Container principal dos accordions agrupados por setor */}
+                <div className="space-y-4">
+                    {Object.entries(groupedProducts).length === 0 ? (
+                        <div className="text-center py-16 text-gray-400">
+                            <div className="flex flex-col items-center justify-center">
+                                <Package size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
+                                <p>{filters.sector || filters.name ? 'Nenhum produto encontrado com os filtros aplicados' : 'Nenhum produto cadastrado'}</p>
+                            </div>
                         </div>
-                        {/* Body */}
-                        <div className="mt-2">
-                            {filteredAndSortedProducts.length === 0 ? (
-                                <div className="text-center py-16 text-gray-400">
-                                    <div className="flex flex-col items-center justify-center">
-                                        <Package size={48} className="text-slate-200 dark:text-slate-600 mb-3" strokeWidth={1.5} />
-                                        <p>{filters.sector || filters.name ? 'Nenhum produto encontrado com os filtros aplicados' : 'Nenhum produto cadastrado'}</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                filteredAndSortedProducts.map((prod) => (
-                                    <div key={prod.id} className="grid grid-cols-12 gap-4 items-center px-4 py-4 border-b dark:border-slate-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                                        <div className="col-span-3 text-gray-600 dark:text-gray-300">{prod.sector}</div>
-                                        <div className="col-span-3 font-medium text-gray-800 dark:text-gray-100">{prod.name}</div>
-                                        <div className="col-span-1 text-gray-600 dark:text-gray-400">{prod.unit}</div>
-                                        <div className="col-span-2 text-gray-600 dark:text-gray-400">{prod.yield || '-'}</div>
-                                        <div className="col-span-2 text-gray-600 dark:text-gray-400">
-                                            {prod.unitCost ? prod.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                                        </div>
-                                        <div className="col-span-1 flex justify-center items-center gap-2 no-print">
-                                            <button type="button" onClick={() => handleView(prod)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" aria-label="Visualizar" title="Visualizar">
-                                                <Eye size={18} />
-                                            </button>
-                                            {!isEspectador() && (
-                                                <>
-                                                    <button type="button" onClick={() => handleOpenModal(prod)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${prod.name} `} title="Editar">
-                                                        <Pencil size={18} />
-                                                    </button>
-                                                    <button type="button" onClick={() => handleDeleteClick(prod.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${prod.name} `} title="Excluir">
+                    ) : (
+                        Object.entries(groupedProducts)
+                            .sort(([a], [b]) => a.localeCompare(b)) // Ordenar por setor alfabeticamente
+                            .map(([sector, sectorProducts]) => {
+                                const isOpen = openAccordions[sector] || false;
+
+                                return (
+                                    <div key={sector} className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200/60 dark:border-slate-700/60 overflow-hidden transition-all duration-300">
+                                        {/* Cabeçalho do Accordion */}
+                                        <div
+                                            className={`
+                                                flex items-center justify-between p-4 transition-colors border-l-4
+                                                ${isOpen
+                                                    ? 'bg-imac-primary/5 dark:bg-slate-700/50 border-imac-primary border-b border-b-imac-primary/10'
+                                                    : 'hover:bg-gray-50 dark:hover:bg-slate-700/30 border-transparent'}
+                                            `}
+                                        >
+                                            <div
+                                                onClick={() => toggleAccordion(sector)}
+                                                className="flex items-center gap-3 cursor-pointer select-none flex-1"
+                                            >
+                                                <div className={`p-2 rounded-lg ${isOpen ? 'bg-imac-primary text-white shadow-sm' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-gray-400'}`}>
+                                                    <Briefcase size={20} />
+                                                </div>
+                                                <div>
+                                                    <h4 className={`text-lg font-bold ${isOpen ? 'text-imac-primary' : 'text-slate-700 dark:text-slate-200'}`}>
+                                                        {sector}
+                                                    </h4>
+                                                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                                                        {sectorProducts.length} {sectorProducts.length !== 1 ? 'produtos' : 'produto'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {/* Botão de exclusão em massa (apenas se usuário tiver permissão) */}
+                                                {!isEspectador() && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteSectorClick(sector, sectorProducts.map(prod => prod.id));
+                                                        }}
+                                                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors no-print"
+                                                        title={`Excluir todos os ${sectorProducts.length} produtos do setor ${sector}`}
+                                                    >
                                                         <Trash2 size={18} />
                                                     </button>
-                                                </>
-                                            )}
+                                                )}
+                                                {/* Ícone de expansão/colapso */}
+                                                <div
+                                                    onClick={() => toggleAccordion(sector)}
+                                                    className={`transform transition-transform duration-300 cursor-pointer p-2 ${isOpen ? 'rotate-180 text-imac-primary' : 'text-gray-400'}`}
+                                                >
+                                                    <ChevronDown size={24} />
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        {/* Corpo do Accordion (lista de produtos) */}
+                                        {isOpen && (
+                                            <div className="animate-fadeIn">
+                                                <div className="overflow-x-auto w-full">
+                                                    <div className="min-w-[1000px] align-middle">
+                                                        {/* Header */}
+                                                        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-imac-secondary/20 dark:bg-slate-700/50">
+                                                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
+                                                            <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
+                                                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Unidade</div>
+                                                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Rendimento</div>
+                                                            <div className="col-span-2 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Custo por Receita</div>
+                                                            <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
+                                                        </div>
+
+                                                        {/* Body */}
+                                                        <div className="divide-y divide-gray-100 dark:divide-slate-700">
+                                                            {sectorProducts.map((prod) => (
+                                                                <div key={prod.id} className="grid grid-cols-12 gap-4 items-center px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                                                                    <div className="col-span-3 text-gray-700 dark:text-gray-400 uppercase">{prod.sector}</div>
+                                                                    <div className="col-span-3 font-bold text-slate-700 dark:text-gray-200 uppercase">{prod.name}</div>
+                                                                    <div className="col-span-1 text-gray-700 dark:text-gray-400">{prod.unit}</div>
+                                                                    <div className="col-span-2 text-gray-700 dark:text-gray-400">{prod.yield || '-'}</div>
+                                                                    <div className="col-span-2 text-gray-700 dark:text-gray-400">
+                                                                        {prod.unitCost ? prod.unitCost.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                                                    </div>
+                                                                    <div className="col-span-1 flex justify-center items-center gap-2 no-print">
+                                                                        <button type="button" onClick={() => handleView(prod)} className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" aria-label="Visualizar" title="Visualizar">
+                                                                            <Eye size={18} />
+                                                                        </button>
+                                                                        {!isEspectador() && (
+                                                                            <>
+                                                                                <button type="button" onClick={() => handleOpenModal(prod)} className="p-2 rounded-lg text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors" aria-label={`Editar ${prod.name} `} title="Editar">
+                                                                                    <Pencil size={18} />
+                                                                                </button>
+                                                                                <button type="button" onClick={() => handleDeleteClick(prod.id)} className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors" aria-label={`Excluir ${prod.name} `} title="Excluir">
+                                                                                    <Trash2 size={18} />
+                                                                                </button>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                                );
+                            })
+                    )}
                 </div>
             </main>
 
@@ -458,6 +597,15 @@ const Products: React.FC<ProductsProps> = ({ products, setProducts }) => {
                     { label: 'Custo por Receita', key: 'unitCost', format: (v) => v ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-' },
                     { label: 'Observações', key: 'notes' }
                 ]}
+            />
+
+            {/* Modal de confirmação para exclusão em massa de produtos por setor */}
+            <ConfirmModal
+                isOpen={!!deleteSectorData}
+                onClose={() => setDeleteSectorData(null)}
+                onConfirm={confirmDeleteSector}
+                title="Excluir Produtos do Setor"
+                message={`Tem certeza que deseja excluir todos os ${deleteSectorData?.productIds.length || 0} produtos do setor ${deleteSectorData?.sector || ''}? Esta ação não pode ser desfeita.`}
             />
         </div>
     );

@@ -6,7 +6,7 @@ O banco de dados `imac_congelados` é relacional e utiliza o PostgreSQL. Ele foi
 
 ### Principais Entidades:
 - **Autenticação**: Usuários e Tokens de Refresh.
-- **Cadastros Base**: Funcionários, Produtos, Insumos eMáquinas.
+- **Cadastros Base**: Funcionários, Produtos, Insumos e Máquinas.
 - **Produção**: Velocidade de Produção (Metas vs Realizado).
 - **Ocorrências**: Perdas, Erros de Produção, Manutenção, Absenteísmo.
 

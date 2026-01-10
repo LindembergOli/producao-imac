@@ -129,7 +129,7 @@ export default function Users() {
         ADMIN: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
         SUPERVISOR: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
         LIDER_PRODUCAO: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-        ESPECTADOR: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+        ESPECTADOR: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
     };
 
     return (
@@ -171,10 +171,10 @@ export default function Users() {
                                             <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
                                                 <UserIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                                             </div>
-                                            <span className="font-medium text-slate-900 dark:text-slate-100">{user.name}</span>
+                                            <span className="font-bold text-slate-700 dark:text-gray-200 uppercase">{user.name}</span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-300">{user.email}</td>
+                                    <td className="px-6 py-4 text-gray-700 dark:text-gray-400">{user.email}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${roleColors[user.role] || roleColors.ESPECTADOR}`}>
                                             {roleLabels[user.role] || user.role}
