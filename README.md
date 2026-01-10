@@ -225,7 +225,7 @@ npm run dev
 
 Após o seed, use:
 - **Email:** admin@imac.com
-- **Senha:** admin123
+- **Senha:** SenhaForte@123
 
 **⚠️ ALTERE IMEDIATAMENTE EM PRODUÇÃO!**
 
