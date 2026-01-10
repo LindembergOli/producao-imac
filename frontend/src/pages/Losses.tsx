@@ -14,7 +14,6 @@ import ViewModal from '../components/ViewModal';
 import DatePickerInput from '../components/DatePickerInput';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
-import { lossesService } from '../services/modules/losses';
 import { formatBrazilianNumber } from '../utils/formatters';
 import { suppliesService } from '../services/modules/supplies';
 

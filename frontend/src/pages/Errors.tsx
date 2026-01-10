@@ -15,7 +15,6 @@ import ViewModal from '../components/ViewModal';
 import DatePickerInput from '../components/DatePickerInput';
 import AutocompleteInput from '../components/AutocompleteInput';
 import { useAuth } from '../contexts/AuthContext';
-import { errorsService } from '../services/modules/errors';
 import { formatBrazilianNumber } from '../utils/formatters';
 
 const COLORS = {
