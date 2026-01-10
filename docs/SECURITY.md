@@ -57,11 +57,6 @@ Todas as senhas devem atender:
 - ✅ Content Security Policy (CSP) via Helmet
 - ✅ Escape automático no React
 
-#### CSRF (Cross-Site Request Forgery)
-- ⚠️ **EM IMPLEMENTAÇÃO**
-- Tokens CSRF em formulários
-- Validação no backend
-
 #### Rate Limiting
 - **Global:** 100 requisições por 15 minutos por IP
 - **Login:** 5 tentativas por 15 minutos por IP

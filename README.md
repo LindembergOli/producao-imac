@@ -1,10 +1,5 @@
 # Sistema de Controle de Produção - IMAC Congelados
 
-**Versão:** 1.0.0  
-**Status:** ✅ Funcional - Em Evolução para Produção
-
----
-
 ## 📋 Visão Geral do Sistema
 
 O **Sistema IMAC Congelados** é uma aplicação desenvolvida para controlar e monitorar a produção industrial de uma fábrica de alimentos congelados. O sistema permite rastrear velocidade de produção, perdas, erros, manutenções e absenteísmo em tempo real.
@@ -378,7 +373,6 @@ O sistema usa **Winston** para logging estruturado.
 backend/logs/
 ├── combined.log      # Todos os logs
 ├── error.log         # Apenas erros
-└── http.log          # Requisições HTTP
 ```
 
 #### Formato dos Logs
@@ -446,6 +440,7 @@ backend/src/
 │   ├── employees/
 │   ├── products/
 │   ├── machines/
+│   ├── supllies/    
 │   └── users/
 │
 └── utils/
@@ -479,6 +474,7 @@ frontend/src/
 │   ├── Employees.tsx
 │   ├── Products.tsx
 │   ├── Machines.tsx
+│   ├── Supllies.tsx
 │   ├── Users.tsx
 │   └── Login.tsx
 │
