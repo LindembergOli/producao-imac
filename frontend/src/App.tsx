@@ -156,15 +156,7 @@ const App: React.FC = () => {
         }
         return <Users />;
       default:
-        return <Dashboard
-          speedRecords={speedRecords}
-          lossRecords={lossRecords}
-          errorRecords={errorRecords}
-          maintenanceRecords={maintenanceRecords}
-          absenteeismRecords={absenteeismRecords}
-          employees={employees}
-          isDarkMode={isDarkMode}
-        />;
+        return <Dashboard employees={employees} isDarkMode={isDarkMode} />;
     }
   };
 
