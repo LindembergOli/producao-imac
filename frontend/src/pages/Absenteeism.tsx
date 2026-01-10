@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { AbsenteeismRecord, Employee } from '../types';
 import { Sector, AbsenceType } from '../types';
 import { formatChartNumber } from '../utils/formatters';
-import { formatChartNumber } from '../utils/formatters';
+
 // Imports dinâmicos para XLSX e jsPDF implementados nas funções de exportação
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';

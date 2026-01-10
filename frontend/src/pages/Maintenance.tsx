@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { MaintenanceRecord, Machine, Employee } from '../types';
 import { Sector, MaintenanceStatus } from '../types';
 import { formatChartNumber, formatText } from '../utils/formatters';
-import { formatChartNumber, formatText } from '../utils/formatters';
+
 // Imports dinâmicos para XLSX e jsPDF implementados nas funções de exportação
 import { Plus, Wrench, TriangleAlert, Activity, TrendingUp, List, File, Pencil, Trash2, Filter, Eye, ChevronDown, Calendar } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
