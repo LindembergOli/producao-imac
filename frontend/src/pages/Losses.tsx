@@ -6,6 +6,7 @@ import { formatChartNumber, formatText } from '../utils/formatters';
 import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter, Eye, ChevronDown, Calendar } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
+import { lossesService } from '../services/modules/losses';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart as RechartsLineChart, Line, ComposedChart, LabelList } from 'recharts';
 
 import Modal, { ConfirmModal } from '../components/Modal';
@@ -216,17 +217,35 @@ const LossRecordForm: React.FC<{
 
 interface LossesProps {
     products: Product[];
-    records: LossRecord[];
-    setRecords: React.Dispatch<React.SetStateAction<LossRecord[]>>;
     isDarkMode: boolean;
 }
 
-const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMode }) => {
+const Losses: React.FC<LossesProps> = ({ products, isDarkMode }) => {
+    // Estados locais para dados carregados sob demanda
+    const [records, setRecords] = useState<LossRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<LossRecord | null>(null);
-
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Carregar dados ao montar o componente
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const data = await lossesService.getAll();
+                setRecords(data);
+            } catch (error) {
+                console.error('Erro ao carregar perdas:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
 
     // Estados para visualização
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -835,6 +854,16 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
             </div>
         </div>
     );
+
+    // Mostrar loading enquanto dados são carregados
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
+                <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando perdas...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">

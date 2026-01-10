@@ -7,6 +7,7 @@ import { formatChartNumber, formatText } from '../utils/formatters';
 import { Plus, Pencil, Trash2, List, File, TriangleAlert, DollarSign, HelpCircle, Star, TrendingUp, Filter, Eye, ChevronDown, Calendar } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
+import { errorsService } from '../services/modules/errors';
 
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, ComposedChart, Bar, LabelList } from 'recharts';
 import Modal, { ConfirmModal } from '../components/Modal';
@@ -194,17 +195,35 @@ const ErrorRecordForm: React.FC<{
 
 interface ErrorsProps {
     products: Product[];
-    records: ErrorRecord[];
-    setRecords: React.Dispatch<React.SetStateAction<ErrorRecord[]>>;
     isDarkMode: boolean;
 }
 
-const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMode }) => {
+const Errors: React.FC<ErrorsProps> = ({ products, isDarkMode }) => {
+    // Estados locais para dados carregados sob demanda
+    const [records, setRecords] = useState<ErrorRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<ErrorRecord | null>(null);
-
     const [deleteId, setDeleteId] = useState<number | null>(null);
+
+    // Carregar dados ao montar o componente
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const data = await errorsService.getAll();
+                setRecords(data);
+            } catch (error) {
+                console.error('Erro ao carregar erros:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
 
     // Estados para visualização
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -858,6 +877,16 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
             </div>
         </div>
     );
+
+    // Mostrar loading enquanto dados são carregados
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
+                <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando erros...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">
