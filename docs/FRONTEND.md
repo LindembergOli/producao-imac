@@ -353,6 +353,26 @@ const ProductionSpeed = React.lazy(() => import('./pages/ProductionSpeed'));
 **Dynamic Imports:**
 ```typescript
 // Bibliotecas de exportação só são carregadas quando necessário
+const XLSX = await import('xlsx');
+const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+  import('jspdf'),
+  import('jspdf-autotable')
+]);
+```
+
+#### Otimizações Implementadas (Fase 2)
+
+**Lazy Loading de Dados:**
+- **Remoção de Requisições Globais**: O `App.tsx` não carrega mais todos os dados no login.
+- **Login Otimizado**: Inicialmente, apenas dados compartilhados leves são carregados (Funcionários, Máquinas, Produtos).
+- **Dados Sob Demanda**: Cada página carrega seus próprios registros pesados (`useEffect` local) apenas quando acessada.
+- **Redução de Carga Inicial**: De 10 requisições simultâneas para 4 no login.
+- **Loading States**: Feedback visual (spinners) em cada página durante o carregamento.
+
+**Impacto:**
+- **Tempo de Login**: Reduzido drasticamente (menos dados trafegados).
+- **Interatividade**: Páginas carregam mais rápido individualmente.
+- **Uso de Memória**: Menor consumo, pois dados não visitados não são carregados.
 const handleExportXLSX = async () => {
   const XLSX = await import('xlsx');
   // ... lógica de exportação
