@@ -522,14 +522,35 @@ const BulkRegistrationModal: React.FC<{
 
 interface ProductionSpeedProps {
     products: Product[];
-    records: ProductionSpeedRecord[];
-    setRecords: React.Dispatch<React.SetStateAction<ProductionSpeedRecord[]>>;
-    observationRecords: ProductionObservationRecord[];
-    setObservationRecords: React.Dispatch<React.SetStateAction<ProductionObservationRecord[]>>;
     isDarkMode: boolean;
 }
 
-const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, records, setRecords, observationRecords, setObservationRecords, isDarkMode }) => {
+const ProductionSpeed: React.FC<ProductionSpeedProps> = ({ products, isDarkMode }) => {
+    // Estados locais para dados carregados sob demanda
+    const [records, setRecords] = useState<ProductionSpeedRecord[]>([]);
+    const [observationRecords, setObservationRecords] = useState<ProductionObservationRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    // Carregar dados ao montar o componente
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const [speeds, observations] = await Promise.all([
+                    productionService.getAll(),
+                    productionObservationsService.getAll()
+                ]);
+                setRecords(speeds);
+                setObservationRecords(observations);
+            } catch (error) {
+                console.error('Erro ao carregar dados de velocidade:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<ProductionSpeedRecord | null>(null);
