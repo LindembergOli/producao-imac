@@ -2,9 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { LossRecord, Product, Supply } from '../types';
 import { Sector, LossType, Unit } from '../types';
 import { formatChartNumber, formatText } from '../utils/formatters';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// XLSX e jsPDF removidos - serão carregados dinamicamente apenas quando necessário
 import { Plus, Pencil, Trash2, List, File, TrendingUp, TrendingDown, DollarSign, Package, Wheat, Layers, Filter, Eye, ChevronDown, Calendar } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
@@ -488,11 +486,17 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
         setDeleteId(id);
     };
 
-    const handleExportXLSX = () => {
+    // Dynamic import: XLSX só é carregado quando usuário clica em exportar
+    // Reduz bundle inicial em ~200KB
+    const handleExportXLSX = async () => {
         if (filteredTableRecords.length === 0) {
             alert("Não há dados para exportar.");
             return;
         }
+
+        // Carrega biblioteca XLSX dinamicamente (apenas na primeira exportação)
+        const XLSX = await import('xlsx');
+
         const dataToExport = filteredTableRecords.map(r => ({
             'Data': new Date(r.date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
             'Setor': r.sector,
@@ -508,11 +512,20 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
         XLSX.writeFile(wb, "perdas_producao.xlsx");
     };
 
-    const handleExportPDF = () => {
+    // Dynamic import: jsPDF só é carregado quando usuário clica em exportar
+    // Reduz bundle inicial em ~200KB
+    const handleExportPDF = async () => {
         if (filteredTableRecords.length === 0) {
             alert("Não há dados para exportar.");
             return;
         }
+
+        // Carrega bibliotecas jsPDF e autoTable dinamicamente
+        const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+            import('jspdf'),
+            import('jspdf-autotable')
+        ]);
+
         const doc = new jsPDF();
         doc.text("Relatório de Perdas de Produção", 14, 16);
         autoTable(doc, {

@@ -1,19 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/Login';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import Dashboard from './pages/Dashboard';
-import ProductionSpeed from './pages/ProductionSpeed';
-import Losses from './pages/Losses';
-import Errors from './pages/Errors';
-import Maintenance from './pages/Maintenance';
-import Absenteeism from './pages/Absenteeism';
-import Employees from './pages/Employees';
-import Products from './pages/Products';
-import Supplies from './pages/Supplies';
-import Machines from './pages/Machines';
-import Users from './pages/Users';
+
+// Code-splitting: Carregamento lazy de páginas para reduzir bundle inicial
+// Cada página será carregada apenas quando necessária
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const ProductionSpeed = React.lazy(() => import('./pages/ProductionSpeed'));
+const Losses = React.lazy(() => import('./pages/Losses'));
+const Errors = React.lazy(() => import('./pages/Errors'));
+const Maintenance = React.lazy(() => import('./pages/Maintenance'));
+const Absenteeism = React.lazy(() => import('./pages/Absenteeism'));
+const Employees = React.lazy(() => import('./pages/Employees'));
+const Products = React.lazy(() => import('./pages/Products'));
+const Supplies = React.lazy(() => import('./pages/Supplies'));
+const Machines = React.lazy(() => import('./pages/Machines'));
+const Users = React.lazy(() => import('./pages/Users'));
 import type { Page, Employee, Product, Supply, Machine, ProductionSpeedRecord, ProductionObservationRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord } from './types';
 
 // Services
@@ -224,7 +227,17 @@ const App: React.FC = () => {
           toggleTheme={toggleTheme}
         />
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 lg:p-10">
-          {renderPage()}
+          {/* Suspense: Mostra fallback enquanto código da página é carregado (code-splitting) */}
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
+                <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando página...</span>
+              </div>
+            }
+          >
+            {renderPage()}
+          </Suspense>
         </main>
       </div>
     </div>
