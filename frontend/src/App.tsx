@@ -59,17 +59,12 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
-  // Estados dos dados (agora vazios inicialmente, populados via API)
+  // Estados de dados compartilhados (usados por múltiplas páginas)
+  // Carregados no login para evitar múltiplas requisições
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [supplies, setSupplies] = useState<Supply[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [speedRecords, setSpeedRecords] = useState<ProductionSpeedRecord[]>([]);
-  const [lossRecords, setLossRecords] = useState<LossRecord[]>([]);
-  const [errorRecords, setErrorRecords] = useState<ErrorRecord[]>([]);
-  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
-  const [absenteeismRecords, setAbsenteeismRecords] = useState<AbsenteeismRecord[]>([]);
-  const [observationRecords, setObservationRecords] = useState<ProductionObservationRecord[]>([]);
 
   // Resetar para Dashboard quando fizer logout
   useEffect(() => {
@@ -78,46 +73,31 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
-  // Carregar dados do backend quando autenticado
+  // Carregar apenas dados compartilhados quando autenticado
+  // Dados específicos de páginas são carregados sob demanda
   useEffect(() => {
     if (isAuthenticated) {
-      loadAllData();
+      loadSharedData();
     }
   }, [isAuthenticated]);
 
-  const loadAllData = async () => {
+  // Carrega apenas dados compartilhados entre páginas (4 requests vs 10 anteriormente)
+  const loadSharedData = async () => {
     try {
       setDataLoading(true);
-      const [
-        emps, prods, supps, machs, speeds, losses, errors, maint, absent, observations
-      ] = await Promise.all([
+      const [emps, prods, supps, machs] = await Promise.all([
         employeesService.getAll(),
         productsService.getAll(),
         suppliesService.getAll(),
-        machinesService.getAll(),
-        productionService.getAll(),
-        lossesService.getAll(),
-        errorsService.getAll(),
-        maintenanceService.getAll(),
-        absenteeismService.getAll(),
-        productionObservationsService.getAll()
+        machinesService.getAll()
       ]);
-
 
       setEmployees(emps);
       setProducts(prods);
       setSupplies(supps);
       setMachines(machs);
-      setSpeedRecords(speeds);
-      setLossRecords(losses);
-      setErrorRecords(errors);
-      setMaintenanceRecords(maint);
-      setAbsenteeismRecords(absent);
-      setObservationRecords(observations);
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-      // Não alertamos erro fatal aqui para não bloquear o usuário, 
-      // mas components individuais podem tentar recarregar ou mostrar erro
+      console.error('Erro ao carregar dados compartilhados:', error);
     } finally {
       setDataLoading(false);
     }
@@ -149,32 +129,17 @@ const App: React.FC = () => {
 
     switch (currentPage) {
       case 'Dashboard':
-        return <Dashboard
-          speedRecords={speedRecords}
-          lossRecords={lossRecords}
-          errorRecords={errorRecords}
-          maintenanceRecords={maintenanceRecords}
-          absenteeismRecords={absenteeismRecords}
-          employees={employees}
-          isDarkMode={isDarkMode}
-        />;
+        return <Dashboard employees={employees} isDarkMode={isDarkMode} />;
       case 'Velocidade':
-        return <ProductionSpeed
-          products={products}
-          records={speedRecords}
-          setRecords={setSpeedRecords}
-          observationRecords={observationRecords}
-          setObservationRecords={setObservationRecords}
-          isDarkMode={isDarkMode}
-        />;
+        return <ProductionSpeed products={products} isDarkMode={isDarkMode} />;
       case 'Perdas':
-        return <Losses products={products} records={lossRecords} setRecords={setLossRecords} isDarkMode={isDarkMode} />;
+        return <Losses products={products} isDarkMode={isDarkMode} />;
       case 'Erros':
-        return <Errors products={products} records={errorRecords} setRecords={setErrorRecords} isDarkMode={isDarkMode} />;
+        return <Errors products={products} isDarkMode={isDarkMode} />;
       case 'Manutenção':
-        return <Maintenance machines={machines} employees={employees} records={maintenanceRecords} setRecords={setMaintenanceRecords} isDarkMode={isDarkMode} />;
+        return <Maintenance machines={machines} employees={employees} isDarkMode={isDarkMode} />;
       case 'Absenteísmo':
-        return <Absenteeism employees={employees} records={absenteeismRecords} setRecords={setAbsenteeismRecords} isDarkMode={isDarkMode} />;
+        return <Absenteeism employees={employees} isDarkMode={isDarkMode} />;
       case 'Funcionários':
         return <Employees employees={employees} setEmployees={setEmployees} />;
       case 'Produtos':
@@ -187,15 +152,7 @@ const App: React.FC = () => {
         // Proteção extra: se não for admin, volta para o dashboard
         if (!isAdmin()) {
           setTimeout(() => setCurrentPage('Dashboard'), 0);
-          return <Dashboard
-            speedRecords={speedRecords}
-            lossRecords={lossRecords}
-            errorRecords={errorRecords}
-            maintenanceRecords={maintenanceRecords}
-            absenteeismRecords={absenteeismRecords}
-            employees={employees}
-            isDarkMode={isDarkMode}
-          />;
+          return <Dashboard employees={employees} isDarkMode={isDarkMode} />;
         }
         return <Users />;
       default:

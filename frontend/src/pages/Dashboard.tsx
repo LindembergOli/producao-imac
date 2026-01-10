@@ -5,11 +5,15 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import type { ProductionSpeedRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord, Employee } from '../types';
 import { Sector, Unit } from '../types';
 import { Activity, TrendingDown, TriangleAlert, Wrench, UserMinus, DollarSign } from 'lucide-react';
-import { maintenanceService } from '../services/modules/maintenance';
 import { formatBrazilianNumber, formatChartNumber } from '../utils/formatters';
 import DatePickerInput from '../components/DatePickerInput';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
+
+// Serviços para carregar dados
+import { productionService } from '../services/modules/production';
+import { lossesService } from '../services/modules/losses';
+import { errorsService } from '../services/modules/errors';
+import { maintenanceService } from '../services/modules/maintenance';
+import { absenteeismService } from '../services/modules/absenteeism';
 
 const COLORS = {
   primary: '#D99B61',
@@ -44,24 +48,47 @@ const countBusinessDays = (startDate: Date, endDate: Date) => {
 };
 
 interface DashboardProps {
-  speedRecords: ProductionSpeedRecord[];
-  lossRecords: LossRecord[];
-  errorRecords: ErrorRecord[];
-  maintenanceRecords: MaintenanceRecord[];
-  absenteeismRecords: AbsenteeismRecord[];
   employees: Employee[];
   isDarkMode: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({
-  speedRecords,
-  lossRecords,
-  errorRecords,
-  maintenanceRecords,
-  absenteeismRecords,
-  employees,
-  isDarkMode
-}) => {
+const Dashboard: React.FC<DashboardProps> = ({ employees, isDarkMode }) => {
+  // Estados locais para dados carregados sob demanda
+  const [speedRecords, setSpeedRecords] = useState<ProductionSpeedRecord[]>([]);
+  const [lossRecords, setLossRecords] = useState<LossRecord[]>([]);
+  const [errorRecords, setErrorRecords] = useState<ErrorRecord[]>([]);
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
+  const [absenteeismRecords, setAbsenteeismRecords] = useState<AbsenteeismRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Carregar dados do dashboard ao montar o componente
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const [speeds, losses, errors, maint, absent] = await Promise.all([
+          productionService.getAll(),
+          lossesService.getAll(),
+          errorsService.getAll(),
+          maintenanceService.getAll(),
+          absenteeismService.getAll()
+        ]);
+
+        setSpeedRecords(speeds);
+        setLossRecords(losses);
+        setErrorRecords(errors);
+        setMaintenanceRecords(maint);
+        setAbsenteeismRecords(absent);
+      } catch (error) {
+        console.error('Erro ao carregar dados do dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
+  }, []); // Carrega apenas uma vez ao montar
+
   // Função auxiliar para normalizar nomes de setores (remove acentos, maiúsculas)
   const normalizeSector = (sector: string): string => {
     return sector
@@ -425,6 +452,16 @@ const Dashboard: React.FC<DashboardProps> = ({
     textAnchor: 'middle' as const,
     height: 50
   };
+
+  // Mostrar loading enquanto dados são carregados
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
+        <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando dashboard...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
