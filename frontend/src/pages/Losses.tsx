@@ -910,4 +910,5 @@ const Losses: React.FC<LossesProps> = ({ products, records, setRecords, isDarkMo
     );
 };
 
-export default Losses;
+// React.memo: Evita re-renderizações desnecessárias quando props não mudam
+export default React.memo(Losses);

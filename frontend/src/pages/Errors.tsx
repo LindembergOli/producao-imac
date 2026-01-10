@@ -935,4 +935,5 @@ const Errors: React.FC<ErrorsProps> = ({ products, records, setRecords, isDarkMo
     );
 };
 
-export default Errors;
+// React.memo: Evita re-renderizações desnecessárias quando props não mudam
+export default React.memo(Errors);
