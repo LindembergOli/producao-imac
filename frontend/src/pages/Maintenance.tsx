@@ -2,9 +2,8 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { MaintenanceRecord, Machine, Employee } from '../types';
 import { Sector, MaintenanceStatus } from '../types';
 import { formatChartNumber, formatText } from '../utils/formatters';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { formatChartNumber, formatText } from '../utils/formatters';
+// Imports dinâmicos para XLSX e jsPDF implementados nas funções de exportação
 import { Plus, Wrench, TriangleAlert, Activity, TrendingUp, List, File, Pencil, Trash2, Filter, Eye, ChevronDown, Calendar } from 'lucide-react';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
@@ -270,16 +269,36 @@ const MaintenanceRecordForm: React.FC<{
 
 interface MaintenanceProps {
     machines: Machine[];
-    employees: Employee[]; // Adicionado
-    records: MaintenanceRecord[];
-    setRecords: React.Dispatch<React.SetStateAction<MaintenanceRecord[]>>;
+    employees: Employee[];
     isDarkMode: boolean;
 }
 
-const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records, setRecords, isDarkMode }) => {
+
+const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, isDarkMode }) => {
+    // Estados locais para dados carregados sob demanda
+    const [records, setRecords] = useState<MaintenanceRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+
     const [activeTab, setActiveTab] = useState('overview');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentRecord, setCurrentRecord] = useState<MaintenanceRecord | null>(null);
+
+    // Carregar dados ao montar o componente
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+                const data = await maintenanceService.getAll();
+                setRecords(data);
+            } catch (error) {
+                console.error('Erro ao carregar manutenções:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, []);
 
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
@@ -678,12 +697,14 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
     };
 
 
-    const handleExportXLSX = () => {
+    const handleExportXLSX = async () => {
         if (filteredTableRecords.length === 0) {
             alert("Não há dados para exportar.");
             return;
         }
-        // const XLSX = (window as any).XLSX; // Removido
+
+        const XLSX = await import('xlsx');
+
         const dataToExport = filteredTableRecords.map(r => ({
             'Data': formatDateSafe(r.date),
             'Setor': r.sector,
@@ -701,12 +722,17 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
         XLSX.writeFile(wb, "ordens_manutencao.xlsx");
     };
 
-    const handleExportPDF = () => {
+    const handleExportPDF = async () => {
         if (filteredTableRecords.length === 0) {
             alert("Não há dados para exportar.");
             return;
         }
-        // const { jsPDF } = (window as any).jspdf; // Removido
+
+        const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+            import('jspdf'),
+            import('jspdf-autotable')
+        ]);
+
         const doc = new jsPDF();
         doc.text("Relatório de Ordens de Manutenção", 14, 16);
         autoTable(doc, {
@@ -1131,6 +1157,16 @@ const Maintenance: React.FC<MaintenanceProps> = ({ machines, employees, records,
             </div>
         </div>
     );
+
+    // Mostrar loading enquanto dados são carregados
+    if (loading) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
+                <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando manutenções...</span>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-4">

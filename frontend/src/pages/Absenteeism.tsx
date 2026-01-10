@@ -2,9 +2,8 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { AbsenteeismRecord, Employee } from '../types';
 import { Sector, AbsenceType } from '../types';
 import { formatChartNumber } from '../utils/formatters';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { formatChartNumber } from '../utils/formatters';
+// Imports dinâmicos para XLSX e jsPDF implementados nas funções de exportação
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { ComposedChart, Bar, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Area } from 'recharts';
@@ -205,8 +204,6 @@ const AbsenteeismRecordForm: React.FC<{
 
 interface AbsenteeismProps {
   employees: Employee[];
-  records: AbsenteeismRecord[];
-  setRecords: React.Dispatch<React.SetStateAction<AbsenteeismRecord[]>>;
   isDarkMode: boolean;
 }
 
@@ -216,8 +213,29 @@ interface AbsenteeismProps {
  * Exibe dashboard com KPIs, gráficos de absenteísmo por setor e evolução mensal,
  * além da tabela de registros diários.
  */
-const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecords, isDarkMode }) => {
+const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, isDarkMode }) => {
+  // Estados locais para dados carregados sob demanda
+  const [records, setRecords] = useState<AbsenteeismRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Carregar dados ao montar o componente
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const data = await absenteeismService.getAll();
+        setRecords(data);
+      } catch (error) {
+        console.error('Erro ao carregar absenteísmo:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<AbsenteeismRecord | null>(null);
 
@@ -654,11 +672,12 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
     setDeleteId(id);
   };
 
-  const handleExportXLSX = () => {
+  const handleExportXLSX = async () => {
     if (filteredTableRecords.length === 0) {
       alert("Não há dados para exportar.");
       return;
     }
+    const XLSX = await import('xlsx');
 
     const dataToExport = filteredTableRecords.map(r => ({
       'Dia da Falta': formatDateSafe(r.date),
@@ -673,12 +692,15 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
     XLSX.writeFile(wb, "absenteismo.xlsx");
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (filteredTableRecords.length === 0) {
       alert("Não há dados para exportar.");
       return;
     }
-    // const { jsPDF } = (window as any).jspdf; // Removido
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable')
+    ]);
     const doc = new jsPDF();
     doc.text("Relatório de Absenteísmo", 14, 16);
 
@@ -1150,6 +1172,16 @@ const Absenteeism: React.FC<AbsenteeismProps> = ({ employees, records, setRecord
       </div>
     </div>
   );
+
+  // Mostrar loading enquanto dados são carregados
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
+        <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando absenteísmo...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
