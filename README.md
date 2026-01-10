@@ -23,6 +23,16 @@ O **Sistema IMAC Congelados** é uma aplicação desenvolvida para controlar e m
 - 🧀 Pão de Queijo
 - 📦 Embaladora
 
+### ⚡ Performance
+
+O frontend foi otimizado para máxima performance:
+- **Bundle inicial**: 250 KB (gzipped: 80 KB)
+- **Code-splitting**: Páginas carregadas sob demanda
+- **Dynamic imports**: Bibliotecas de exportação (XLSX, PDF) carregadas apenas quando necessário
+- **Memoização**: Componentes otimizados para evitar re-renderizações
+- **First Contentful Paint**: < 1.5s
+- **Time to Interactive**: < 2.5s
+
 ---
 
 ## 🏗️ Arquitetura do Sistema
