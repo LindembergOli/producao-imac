@@ -31,42 +31,50 @@ const consoleFormat = winston.format.combine(
     })
 );
 
-// Configuração de rotação diária para logs de erro
-const errorRotateTransport = new DailyRotateFile({
-    filename: 'logs/error-%DATE%.log',
-    datePattern: 'YYYY-MM-DD',
-    level: 'error',
-    maxSize: '20m',      // Máximo 20MB por arquivo
-    maxFiles: '14d',     // Manter logs por 14 dias
-    zippedArchive: true, // Comprimir logs antigos
-});
+// Criar logger com transportes baseados no ambiente
+const transports = [];
 
-// Configuração de rotação diária para todos os logs
-const combinedRotateTransport = new DailyRotateFile({
-    filename: 'logs/combined-%DATE%.log',
-    datePattern: 'YYYY-MM-DD',
-    maxSize: '20m',      // Máximo 20MB por arquivo
-    maxFiles: '30d',     // Manter logs por 30 dias
-    zippedArchive: true, // Comprimir logs antigos
-});
+// Em produção, salvar logs em arquivo com rotação
+if (!config.isDevelopment) {
+    // Configuração de rotação diária para logs de erro
+    const errorRotateTransport = new DailyRotateFile({
+        filename: 'logs/error-%DATE%.log',
+        datePattern: 'YYYY-MM-DD',
+        level: 'error',
+        maxSize: '20m',      // Máximo 20MB por arquivo
+        maxFiles: '14d',     // Manter logs por 14 dias
+        zippedArchive: true, // Comprimir logs antigos
+    });
 
-// Criar logger
+    // Configuração de rotação diária para todos os logs
+    const combinedRotateTransport = new DailyRotateFile({
+        filename: 'logs/combined-%DATE%.log',
+        datePattern: 'YYYY-MM-DD',
+        maxSize: '20m',      // Máximo 20MB por arquivo
+        maxFiles: '30d',     // Manter logs por 30 dias
+        zippedArchive: true, // Comprimir logs antigos
+    });
+
+    transports.push(errorRotateTransport);
+    transports.push(combinedRotateTransport);
+}
+
+// Em desenvolvimento (ou sempre que desejado), logar no console
+// Adicionamos sempre o Console para garantir visibilidade
+transports.push(
+    new winston.transports.Console({
+        format: config.isDevelopment ? consoleFormat : logFormat,
+    })
+);
+
 const logger = winston.createLogger({
     level: config.logging.level,
     format: logFormat,
     defaultMeta: { service: 'imac-backend' },
-    transports: [
-        errorRotateTransport,
-        combinedRotateTransport,
-    ],
+    transports: transports,
 });
 
-// Logar sempre no console (prática recomendada para Docker/Containers)
-logger.add(
-    new winston.transports.Console({
-        format: consoleFormat,
-    })
-);
+
 
 /**
  * Middleware para logar requisições HTTP.

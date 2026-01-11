@@ -100,7 +100,6 @@ imac-congelados/
 │   │   └── nginx.conf    # Configuração Nginx + SSL
 │   │
 │   └── scripts/          # Scripts auxiliares
-│       ├── docker-dev.bat              # Iniciar Docker (Windows)
 │       ├── docker-dev.sh               # Iniciar Docker (Linux/Mac)
 │       ├── docker-backup.sh            # Backup automatizado
 │       ├── deploy.sh                   # Script de deploy

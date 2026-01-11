@@ -155,7 +155,7 @@ const LossRecordForm: React.FC<{
         <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <div><label className="block text-sm font-medium mb-1 dark:text-gray-300">Data</label><DatePickerInput value={formData.date || ''} onChange={date => setFormData({ ...formData, date })} /></div>
-                <div><label className="block text-sm font-medium mb-1 dark:text-gray-300">Setor</label><select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass} required><option value="">Selecione</option>{Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                <div><label className="block text-sm font-medium mb-1 dark:text-gray-300">Setor</label><select value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value as Sector })} className={inputClass} required><option value="">Selecione</option>{Object.values(Sector).filter(s => s !== Sector.MANUTENCAO && s !== Sector.EMBALADORA).map(s => <option key={s} value={s}>{s}</option>)}</select></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -416,7 +416,7 @@ const Losses: React.FC<LossesProps> = ({ products, isDarkMode }) => {
     }, [filteredOverviewRecords]);
 
     const chartData = useMemo(() => {
-        const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+        const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO && s !== Sector.EMBALADORA);
         const dataBySector = filteredOverviewRecords.reduce((acc, rec) => {
             if (!acc[rec.sector]) {
                 acc[rec.sector] = {
@@ -719,7 +719,7 @@ const Losses: React.FC<LossesProps> = ({ products, isDarkMode }) => {
                             className="w-full rounded-md border-gray-200 dark:border-slate-600 shadow-sm p-2 bg-white dark:bg-slate-700 dark:text-white text-sm"
                         >
                             <option value="Todos">Todos</option>
-                            {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO).map(s => <option key={s} value={s}>{s}</option>)}
+                            {Object.values(Sector).filter(s => s !== Sector.MANUTENCAO && s !== Sector.EMBALADORA).map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
                     <div>

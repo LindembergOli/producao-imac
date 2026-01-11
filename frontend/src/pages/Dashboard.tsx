@@ -272,7 +272,7 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, isDarkMode }) => {
   }, [filteredLoss, filteredError, dateRange]);
 
   const chartData = useMemo(() => {
-    const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+    const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO && s !== Sector.EMBALADORA);
 
     const speedBySector = filteredSpeed.reduce((acc, rec) => {
       const normalizedSector = normalizeSector(rec.sector);
@@ -338,6 +338,32 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, isDarkMode }) => {
       };
     });
   }, [filteredSpeed, filteredLoss, filteredError, filteredAbsenteeism, employees, kpiData.businessDays]);
+
+  // Dados específicos para o gráfico de Erros (incluindo EMBALADORA)
+  const errorsChartData = useMemo(() => {
+    const sectors = Object.values(Sector).filter(s => s !== Sector.MANUTENCAO);
+
+    const errorsBySector = filteredError.reduce((acc, rec) => {
+      const normalizedSector = normalizeSector(rec.sector);
+      if (!acc[normalizedSector]) acc[normalizedSector] = { q: 0, c: 0, w: 0 };
+      acc[normalizedSector].q += 1;
+      acc[normalizedSector].c += rec.cost;
+      acc[normalizedSector].w += rec.wastedQty || 0;
+      return acc;
+    }, {} as Record<string, { q: number, c: number, w: number }>);
+
+    return sectors.map(s => {
+      const normalizedSector = normalizeSector(s);
+      const errors = errorsBySector[normalizedSector];
+
+      return {
+        name: s,
+        'Quantidade': errors ? errors.q : 0,
+        'Custo (R$) Erros': errors ? errors.c : 0,
+        'Desperdício (KG)': errors ? Number(errors.w.toFixed(3)) : 0,
+      };
+    });
+  }, [filteredError]);
 
   const maintenanceData = useMemo(() => {
     const stopsBySectorData = filteredMaintenance.reduce((acc, rec) => {
@@ -601,7 +627,7 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, isDarkMode }) => {
 
         <ChartContainer title="Erros de Produção por Setor">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
+            <ComposedChart data={errorsChartData} margin={{ top: 20, right: 10, left: -10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
               <XAxis
                 dataKey="name"
