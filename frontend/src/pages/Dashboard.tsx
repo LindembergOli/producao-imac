@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import KpiCard from '../components/KpiCard';
 import ChartContainer from '../components/ChartContainer';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ComposedChart, LabelList, Area } from 'recharts';
@@ -103,6 +104,9 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, isDarkMode }) => {
     end: ''
   });
 
+  // Debounce para evitar re-cálculos excessivos ao alterar datas rapidamente
+  const debouncedDateRange = useDebounce(dateRange, 500);
+
   // Filtrar registros para visualização no dashboard
   const { filteredSpeed, filteredLoss, filteredError, filteredMaintenance, filteredAbsenteeism } = useMemo(() => {
     // Definir lógica de filtro
@@ -121,13 +125,13 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, isDarkMode }) => {
           recDate = new Date(rec[dateField]);
         }
 
-        if (dateRange.start) {
-          const startDate = new Date(dateRange.start);
+        if (debouncedDateRange.start) {
+          const startDate = new Date(debouncedDateRange.start);
           if (recDate < startDate) return false;
         }
 
-        if (dateRange.end) {
-          const endDate = new Date(dateRange.end);
+        if (debouncedDateRange.end) {
+          const endDate = new Date(debouncedDateRange.end);
           endDate.setHours(23, 59, 59, 999);
           if (recDate > endDate) return false;
         }
@@ -145,7 +149,7 @@ const Dashboard: React.FC<DashboardProps> = ({ employees, isDarkMode }) => {
     };
 
     return result;
-  }, [dateRange, speedRecords, lossRecords, errorRecords, maintenanceRecords, absenteeismRecords]);
+  }, [debouncedDateRange, speedRecords, lossRecords, errorRecords, maintenanceRecords, absenteeismRecords]);
 
 
   const kpiData = useMemo(() => {

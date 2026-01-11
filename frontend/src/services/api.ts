@@ -42,10 +42,31 @@ api.interceptors.response.use(
         return response;
     },
     async (error: AxiosError) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _retryCount?: number };
+
+        if (!error.response) {
+            return Promise.reject(error);
+        }
+
+        // Tratamento de Rate Limiting (429) - Exponential Backoff
+        // Não retentar chamadas de verificação de sessão (auth/me) ou login para evitar bloqueio prolongado
+        const isAuthRequest = originalRequest.url?.includes('/auth/me') || originalRequest.url?.includes('/auth/login');
+
+        if (error.response.status === 429 && !isAuthRequest && (originalRequest._retryCount || 0) < 2) {
+            originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+            const delay = 1000 * Math.pow(2, originalRequest._retryCount - 1); // 1s, 2s
+
+            console.warn(`[429] Rate limit atingido. Tentativa ${originalRequest._retryCount} de 2 em ${delay}ms...`);
+
+            // Esperar antes de tentar novamente
+            await new Promise(resolve => setTimeout(resolve, delay));
+
+            // Retentar requisição
+            return api(originalRequest);
+        }
 
         // Se token expirou (401) e não é uma tentativa de refresh
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        if (error.response.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
             try {

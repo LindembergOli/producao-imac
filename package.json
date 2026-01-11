@@ -4,9 +4,9 @@
   "description": "Orquestração do projeto IMAC Congelados",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others \"npm run backend\" \"npm run frontend\"",
-    "backend": "npm --prefix backend run dev",
-    "frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently --kill-others \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev",
     "dev:docker": "docker-compose up",
     "prod:start": "echo 'Docker não detectado. Para produção sem Docker, inicie o backend e frontend manualmente conforme GUIA_DEPLOY_WINDOWS.md'",
     "setup": "npm install && npm --prefix backend install && npm --prefix frontend install",

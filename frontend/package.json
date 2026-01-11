@@ -49,10 +49,13 @@
     "exceljs": "^4.4.0",
     "jsdom": "^23.0.1",
     "postcss": "^8.5.6",
+    "rollup-plugin-visualizer": "^6.0.5",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.18",
     "terser": "^5.44.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
+    "vite-plugin-pwa": "^1.2.0",
     "vitest": "^1.0.4"
   }
 }

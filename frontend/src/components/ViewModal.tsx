@@ -37,7 +37,7 @@ const ViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, title, data, fie
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl transform transition-all border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col">
 
-                {/* Header */}
+                {/* Cabeçalho */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-imac-primary/10 rounded-lg">
@@ -53,14 +53,14 @@ const ViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, title, data, fie
                     </button>
                 </div>
 
-                {/* Body */}
+                {/* Corpo */}
                 <div className="p-6 overflow-y-auto custom-scrollbar">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {fields.map((field, index) => {
                             const value = data[field.key];
                             const formattedValue = field.format ? field.format(value) : (value ?? '-');
 
-                            // Check if value is boolean for display
+                            // Verifica se o valor é booleano para exibição
                             const displayValue = typeof formattedValue === 'boolean'
                                 ? (formattedValue ? 'Sim' : 'Não')
                                 : formattedValue;
@@ -79,7 +79,7 @@ const ViewModal: React.FC<ViewModalProps> = ({ isOpen, onClose, title, data, fie
                     </div>
                 </div>
 
-                {/* Footer */}
+                {/* Rodapé */}
                 <div className="p-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-100 dark:border-slate-700 rounded-b-xl flex justify-end">
                     <button
                         onClick={onClose}

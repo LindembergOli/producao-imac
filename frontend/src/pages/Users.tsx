@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, usersService } from '../services/modules/users';
 import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/authService';
 import { Plus, Trash2, Shield, User as UserIcon, Mail, Lock, Pencil, Eye } from 'lucide-react';
 import { Sector } from '../types';
 import ViewModal from '../components/ViewModal';
@@ -100,7 +101,6 @@ export default function Users() {
                 alert('Usuário atualizado com sucesso!');
             } else {
                 // Criar novo usuário
-                const { authService } = await import('../services/authService');
                 await authService.register({
                     name: formData.name,
                     email: formData.email,

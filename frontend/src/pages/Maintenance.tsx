@@ -23,7 +23,7 @@ const COLORS = {
     tertiary: '#B36B3C',
     success: '#2ECC71',
     error: '#E74C3C',
-    pie: ['#34D399', '#FBBF24', '#F87171', '#60A5FA', '#A78BFA'] // Emerald, Amber, Red, Blue, Violet
+    pie: ['#34D399', '#FBBF24', '#F87171', '#60A5FA', '#A78BFA'] // Esmeralda, Âmbar, Vermelho, Azul, Violeta
 };
 
 // getMesAnoOptions removido pois agora usamos DatePickerInput com type="month"

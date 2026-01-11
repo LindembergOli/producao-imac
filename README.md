@@ -73,6 +73,7 @@ imac-congelados/
 │   │   ├── app.js        # Configuração Express
 │   │   └── server.js     # Entry point
 │   ├── prisma/           # Schema e migrações
+│   └── Dockerfile        # Imagem Docker do backend
 │
 ├── frontend/             # React App
 │   ├── src/
@@ -83,22 +84,45 @@ imac-congelados/
 │   │   ├── hooks/        # Custom hooks
 │   │   ├── types/        # TypeScript types
 │   │   └── utils/        # Utilitários
+│   ├── Dockerfile        # Imagem Docker do frontend
+│   └── nginx.conf        # Configuração Nginx interno
 │
 ├── infra/                # Infraestrutura
-│   ├── docker/           # Docker Compose
+│   ├── docker/           # Docker Compose + Configurações
+│   │   ├── docker-compose.yml          # Ambiente de desenvolvimento
+│   │   ├── docker-compose.prod.yml     # Ambiente de produção
+│   │   ├── .env                        # Variáveis de desenvolvimento
+│   │   ├── production.env              # Variáveis de produção
+│   │   ├── init-dev-certs.ps1          # Gerar certificados SSL (teste)
+│   │   └── init-letsencrypt.sh         # Configurar Let's Encrypt
+│   │
+│   ├── nginx/            # Proxy Reverso (Produção)
+│   │   └── nginx.conf    # Configuração Nginx + SSL
+│   │
 │   └── scripts/          # Scripts auxiliares
+│       ├── docker-dev.bat              # Iniciar Docker (Windows)
+│       ├── docker-dev.sh               # Iniciar Docker (Linux/Mac)
+│       ├── docker-backup.sh            # Backup automatizado
+│       ├── deploy.sh                   # Script de deploy
+│       ├── health-check.sh             # Verificação de saúde
+│       └── rollback.sh                 # Rollback de versão
 │
-└── docs/                 # Documentação
-    ├── ARQUITETURA.md
-    ├── BACKEND.md
-    ├── CONTRIBUTING.md
-    ├── DATABASE_GUIDE.md
-    ├── DATA_GOVERNANCE.md
-    ├── DEPLOYMENT.md
-    ├── DEVELOPMENT.md
-    ├── FRONTEND.md
-    ├── SECURITY.md
-    └── TROUBLESHOOTING.md
+├── docs/                 # Documentação
+│   ├── ARQUITETURA.md
+│   ├── BACKEND.md
+│   ├── CONTRIBUTING.md
+│   ├── DATABASE_GUIDE.md
+│   ├── DATA_GOVERNANCE.md
+│   ├── DEPLOYMENT.md
+│   ├── DEVELOPMENT.md
+│   ├── DOCKER_SETUP.md
+│   ├── FRONTEND.md
+│   ├── PRODUCTION_GUIDE.md
+│   ├── SECURITY.md
+│   └── TROUBLESHOOTING.md
+│
+├── start.bat             # Iniciar backend + frontend (Windows)
+└── README.md             # Este arquivo
 ```
 
 ---
@@ -237,22 +261,28 @@ Docker é a forma **recomendada** para desenvolvimento e produção.
 ### Pré-requisitos
 
 - **Docker Desktop** ([Download](https://www.docker.com/products/docker-desktop/))
+- **PostgreSQL** instalado localmente no Windows ([Download](https://www.postgresql.org/download/))
+  - O ambiente Docker conecta ao seu banco local (não usa container de banco)
 
 ### Início Rápido
 
-#### Windows
-
-```cmd
-cd infra\scripts
-docker-dev.bat
-```
-
-#### Linux/Mac
+#### Desenvolvimento
 
 ```bash
-cd infra/scripts
-chmod +x docker-dev.sh
-./docker-dev.sh
+cd infra/docker
+docker-compose up -d
+```
+
+Isso iniciará:
+- ✅ Backend (porta 3001)
+- ✅ Frontend (porta 3000)
+- 🔗 Conecta ao PostgreSQL local do Windows
+
+#### Produção (Teste Local)
+
+```bash
+cd infra/docker
+docker-compose -f docker-compose.prod.yml up -d
 ```
 
 ### Comandos Docker Úteis
@@ -260,37 +290,33 @@ chmod +x docker-dev.sh
 ```bash
 # Iniciar em modo desenvolvimento
 cd infra/docker
-docker compose up
+docker-compose up
 
 # Iniciar em background
-docker compose up -d
+docker-compose up -d
 
 # Ver logs
-docker compose logs -f
+docker-compose logs -f
 
 # Parar containers
-docker compose down
+docker-compose down
 
 # Rebuild completo
-docker compose down -v
-docker compose up --build
+docker-compose down -v
+docker-compose up --build
 
-# Acessar banco de dados
-docker compose exec postgres psql -U imac_user -d imac_congelados
+# Acessar banco de dados LOCAL
+psql -U postgres -d imac_congelados
+
+# OU via Prisma Studio (recomendado)
+cd backend
+npx prisma studio
 
 # Executar migrações
-docker compose exec backend npx prisma migrate deploy
+docker-compose exec backend npx prisma migrate deploy
 
-# Backup do banco
-cd infra/scripts
-./docker-backup.sh
-```
-
-### Produção com Docker
-
-```bash
-cd infra/docker
-docker compose -f docker-compose.prod.yml up -d
+# Backup do banco LOCAL
+pg_dump -U postgres imac_congelados > backup_$(Get-Date -Format "yyyyMMdd").sql
 ```
 
 **📖 Documentação Completa:** [infra/docker/README.md](infra/docker/README.md)
@@ -690,6 +716,8 @@ Antes de colocar em produção, verifique:
 - [x] Dynamic Imports (bibliotecas pesadas sob demanda) ✅
 - [x] Bundle Size Otimizado (-70% no load inicial) ✅
 - [x] Memoização de componentes chave ✅
+- [x] PWA Instalável (Offline Support) ✅
+- [x] Error Boundaries (Tratamento de falhas de renderização) ✅
 
 ### Monitoramento
 - [ ] Logs estruturados ativados

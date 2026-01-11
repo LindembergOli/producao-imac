@@ -1,37 +1,6 @@
-version: '3.8'
-
 services:
   # ================================
-  # Banco de Dados PostgreSQL
-  # ================================
-  postgres:
-    image: postgres:15-alpine
-    container_name: imac-postgres-dev
-    restart: unless-stopped
-    labels:
-      com.imac.service: "database"
-      com.imac.environment: "development"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-imac_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imac_password}
-      POSTGRES_DB: ${POSTGRES_DB:-imac_congelados}
-      # Configurações de performance
-      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=pt_BR.UTF8"
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - imac-network
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-imac_user}" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # ================================
-  # API Backend
+  # API Backend (conecta ao PostgreSQL local do Windows)
   # ================================
   backend:
     build:
@@ -47,7 +16,7 @@ services:
       NODE_ENV: development
       PORT: 3001
       HOST: 0.0.0.0
-      DATABASE_URL: postgresql://${POSTGRES_USER:-imac_user}:${POSTGRES_PASSWORD:-imac_password}@postgres:5432/${POSTGRES_DB:-imac_congelados}?schema=public
+      DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production_min_32_chars}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_in_production_min_32}
@@ -62,9 +31,8 @@ services:
       - ../../backend:/app
       - /app/node_modules
       - backend_logs:/app/logs
-    depends_on:
-      postgres:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - imac-network
     healthcheck:
@@ -98,7 +66,7 @@ services:
       - backend
     networks:
       - imac-network
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -c "npm install --legacy-peer-deps && npm run dev -- --host 0.0.0.0"
 
 # ================================
 # Redes
@@ -111,7 +79,5 @@ networks:
 # Volumes
 # ================================
 volumes:
-  postgres_data:
-    driver: local
   backend_logs:
     driver: local

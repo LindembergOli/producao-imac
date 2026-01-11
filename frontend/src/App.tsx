@@ -3,23 +3,29 @@ import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/Login';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Code-splitting: Carregamento lazy de páginas para reduzir bundle inicial
 // Cada página será carregada apenas quando necessária
-const Dashboard = React.lazy(() => import('./pages/Dashboard'));
-const ProductionSpeed = React.lazy(() => import('./pages/ProductionSpeed'));
-const Losses = React.lazy(() => import('./pages/Losses'));
-const Errors = React.lazy(() => import('./pages/Errors'));
-const Maintenance = React.lazy(() => import('./pages/Maintenance'));
-const Absenteeism = React.lazy(() => import('./pages/Absenteeism'));
-const Employees = React.lazy(() => import('./pages/Employees'));
-const Products = React.lazy(() => import('./pages/Products'));
-const Supplies = React.lazy(() => import('./pages/Supplies'));
-const Machines = React.lazy(() => import('./pages/Machines'));
-const Users = React.lazy(() => import('./pages/Users'));
+import { LazyRoutes } from './routes';
+
+// Code-splitting: Componentes lazy carregados de src/routes.ts
+const {
+  Dashboard,
+  ProductionSpeed,
+  Losses,
+  Errors,
+  Maintenance,
+  Absenteeism,
+  Employees,
+  Products,
+  Supplies,
+  Machines,
+  Users
+} = LazyRoutes;
 import type { Page, Employee, Product, Supply, Machine, ProductionSpeedRecord, ProductionObservationRecord, LossRecord, ErrorRecord, MaintenanceRecord, AbsenteeismRecord } from './types';
 
-// Services
+// Serviços
 import { employeesService } from './services/modules/employees';
 import { productsService } from './services/modules/products';
 import { suppliesService } from './services/modules/supplies';
@@ -161,35 +167,37 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
-      <Sidebar
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        isSidebarOpen={isSidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-      />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header
+    <ErrorBoundary>
+      <div className="flex h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+        <Sidebar
           currentPage={currentPage}
-          toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
-          isDarkMode={isDarkMode}
-          toggleTheme={toggleTheme}
+          setCurrentPage={setCurrentPage}
+          isSidebarOpen={isSidebarOpen}
+          setSidebarOpen={setSidebarOpen}
         />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 lg:p-10">
-          {/* Suspense: Mostra fallback enquanto código da página é carregado (code-splitting) */}
-          <Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
-                <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando página...</span>
-              </div>
-            }
-          >
-            {renderPage()}
-          </Suspense>
-        </main>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header
+            currentPage={currentPage}
+            toggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+          />
+          <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 lg:p-10">
+            {/* Suspense: Mostra fallback enquanto código da página é carregado (code-splitting) */}
+            <Suspense
+              fallback={
+                <div className="flex h-full items-center justify-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-imac-primary"></div>
+                  <span className="ml-4 text-slate-600 dark:text-slate-400">Carregando página...</span>
+                </div>
+              }
+            >
+              {renderPage()}
+            </Suspense>
+          </main>
+        </div>
       </div>
-    </div>
+    </ErrorBoundary>
   );
 };
 

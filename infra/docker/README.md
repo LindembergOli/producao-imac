@@ -1,137 +1,233 @@
-# 🐳 Docker - Guia Rápido
+# 🐳 Docker - Guia Completo
 
-## Início Rápido
+## 📌 Visão Geral
 
-### Windows
-```cmd
-cd infra\scripts
-docker-dev.bat
+O sistema IMAC Congelados utiliza Docker para criar ambientes isolados e reproduzíveis. Existem **dois ambientes**:
+
+- **Desenvolvimento** (`docker-compose.yml`) - Conecta ao PostgreSQL local do Windows
+- **Produção** (`docker-compose.prod.yml`) - Ambiente completo com Nginx, SSL e banco local
+
+## 🚀 Início Rápido - Desenvolvimento
+
+### Pré-requisitos
+
+1. **Docker Desktop** instalado e rodando
+2. **PostgreSQL** instalado localmente no Windows (porta 5432)
+3. Banco de dados `imac_congelados` criado
+
+### Configurar Variáveis de Ambiente
+
+Crie o arquivo `.env` em `infra/docker/`:
+
+```env
+# Banco de Dados Local (Windows)
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=suaSenha
+POSTGRES_DB=imac_congelados
+DATABASE_URL=postgresql://postgres:suaSenha%40@host.docker.internal:5432/imac_congelados?schema=public
+
+# Backend
+NODE_ENV=development
+PORT=3001
+JWT_SECRET=dev_secret_key_with_minimum_32_characters_length
+JWT_REFRESH_SECRET=dev_refresh_secret_key_with_minimum_32_characters_length
+CORS_ORIGIN=http://localhost:3000
+
+# Frontend
+VITE_API_URL=http://localhost:3001/api
 ```
 
-### Linux/Mac
+**⚠️ Importante:** Se sua senha tiver caracteres especiais, use URL encoding (ex: `@` vira `%40`).
+
+### Iniciar Ambiente de Desenvolvimento
+
 ```bash
-cd infra/scripts
-chmod +x docker-dev.sh
-./docker-dev.sh
+cd infra/docker
+docker-compose up -d
 ```
 
-## Acessar Aplicação
+### Acessar Aplicação
 
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001/api
-- **PostgreSQL**: localhost:5432
-  - User: `imac_user`
-  - Database: `imac_congelados`
-  - Password: (ver `.env`)
+- **PostgreSQL**: localhost:5432 (seu banco local)
 
 ## Comandos Essenciais
 
 ### Iniciar Serviços
 ```bash
 # Desenvolvimento (com logs)
-docker compose up
+docker-compose up
 
 # Background (daemon)
-docker compose up -d
+docker-compose up -d
 
 # Rebuild e iniciar
-docker compose up --build -d
-
-# Apenas PostgreSQL
-docker compose up postgres -d
+docker-compose up --build -d
 ```
 
 ### Parar Serviços
 ```bash
 # Parar containers
-docker compose down
+docker-compose down
 
-# Parar e remover volumes (APAGA DADOS!)
-docker compose down -v
+# Parar e remover volumes
+docker-compose down -v
 ```
 
 ### Ver Logs
 ```bash
 # Todos os serviços
-docker compose logs -f
+docker-compose logs -f
 
 # Serviço específico
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f postgres
+docker-compose logs -f backend
+docker-compose logs -f frontend
 
 # Últimas 100 linhas
-docker compose logs --tail=100 backend
+docker-compose logs --tail=100 backend
 ```
 
 ### Status
 ```bash
 # Ver containers rodando
-docker compose ps
+docker-compose ps
 
-# Ver uso de recursos
+# Ver uso de recursos (CPU/RAM)
 docker stats
 ```
 
 ### Acessar Containers
 ```bash
 # Backend
-docker compose exec backend sh
+docker-compose exec backend sh
 
-# PostgreSQL
-docker compose exec postgres psql -U imac_user -d imac_congelados
+# Frontend
+docker-compose exec frontend sh
+```
 
-# Frontend (produção)
-docker compose exec frontend sh
+### Acessar Banco de Dados Local
+
+Como o PostgreSQL está no seu Windows (não em container), use ferramentas locais:
+
+```bash
+# Via psql (se instalado)
+psql -U postgres -d imac_congelados
+
+# Via Prisma Studio (recomendado)
+cd ../../backend
+npx prisma studio
 ```
 
 ## Database
 
-### Backup
+### Backup do Banco Local
+
 ```bash
+# Windows (PowerShell)
+pg_dump -U postgres imac_congelados > backup_$(Get-Date -Format "yyyyMMdd_HHmmss").sql
+
 # Linux/Mac
-cd infra/scripts
-./docker-backup.sh
-
-# Manual
-docker compose exec postgres pg_dump -U imac_user imac_congelados > backup.sql
+pg_dump -U postgres imac_congelados > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
-### Restaurar
+### Restaurar Backup
+
 ```bash
-docker compose exec -T postgres psql -U imac_user imac_congelados < backup.sql
+# Criar banco (se necessário)
+createdb -U postgres imac_congelados
+
+# Restaurar
+psql -U postgres -d imac_congelados < backup.sql
 ```
 
-### Migrations
+### Migrations (Prisma)
+
 ```bash
-# Executar migrations
-docker compose exec backend npx prisma migrate deploy
+# Executar migrations no container backend
+docker-compose exec backend npx prisma migrate deploy
 
 # Ver status
-docker compose exec backend npx prisma migrate status
+docker-compose exec backend npx prisma migrate status
 
 # Gerar Prisma Client
-docker compose exec backend npx prisma generate
+docker-compose exec backend npx prisma generate
 
-# Abrir Prisma Studio
-docker compose exec backend npx prisma studio
+# Abrir Prisma Studio (interface visual)
+docker-compose exec backend npx prisma studio
 ```
 
-## Produção
+## 🚀 Produção
 
-### Deploy
+### Configuração de Produção
+
+O ambiente de produção usa:
+- **Nginx** como proxy reverso (portas 80/443)
+- **SSL/HTTPS** com certificados auto-assinados (dev) ou Let's Encrypt (produção real)
+- **Banco de dados local** do Windows (mesmo do desenvolvimento)
+
+### Configurar Variáveis de Produção
+
+Crie o arquivo `production.env` em `infra/docker/`:
+
+```env
+# Banco de Dados Local (Windows)
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=SuaSenhaForte123!
+POSTGRES_DB=imac_congelados
+DATABASE_URL=postgresql://postgres:SuaSenhaForte123%21@host.docker.internal:5432/imac_congelados?schema=public
+
+# Secrets JWT (GERE VALORES ÚNICOS E FORTES!)
+JWT_SECRET=seu_secret_aleatorio_com_minimo_32_caracteres_aqui
+JWT_REFRESH_SECRET=seu_refresh_secret_aleatorio_com_minimo_32_caracteres
+
+# Servidor
+NODE_ENV=production
+PORT=3001
+CORS_ORIGIN=https://producaoimac.com
+
+# Frontend
+VITE_API_URL=https://producaoimac.com/api
+
+# Domínio
+DOMAIN_NAME=producaoimac.com
+```
+
+**⚠️ IMPORTANTE:** 
+- Gere secrets fortes usando: `openssl rand -base64 32`
+- URL encode caracteres especiais na senha (`!` vira `%21`, `@` vira `%40`)
+- Nunca commite o arquivo `production.env` no Git
+
+### Iniciar Produção (Teste Local)
+
 ```bash
-# Carregar variáveis de produção
-export $(cat .env.production | xargs)
+cd infra/docker
 
-# Build e iniciar
-docker compose -f docker-compose.prod.yml up --build -d
+# Gerar certificados SSL auto-assinados (apenas para teste local)
+.\init-dev-certs.ps1
+
+# Iniciar ambiente de produção
+docker-compose -f docker-compose.prod.yml up -d
 
 # Ver logs
-docker compose -f docker-compose.prod.yml logs -f
+docker-compose -f docker-compose.prod.yml logs -f
+```
 
-# Parar
-docker compose -f docker-compose.prod.yml down
+### Acessar Produção Local
+
+1. Adicione ao arquivo `C:\Windows\System32\drivers\etc\hosts`:
+   ```
+   127.0.0.1 producaoimac.com
+   127.0.0.1 www.producaoimac.com
+   ```
+
+2. Acesse: https://producaoimac.com
+   - Aceite o aviso de certificado auto-assinado
+
+### Parar Produção
+
+```bash
+docker-compose -f docker-compose.prod.yml down
 ```
 
 ## Troubleshooting
@@ -152,53 +248,79 @@ lsof -i :5432
 ### Container não inicia
 ```bash
 # Ver logs detalhados
-docker compose logs backend
+docker-compose logs backend
 
 # Verificar health check
-docker compose ps
+docker-compose ps
 
 # Rebuild do zero
-docker compose down -v
-docker compose up --build
+docker-compose down -v
+docker-compose up --build
 ```
 
 ### Database connection refused
-```bash
-# Verificar se PostgreSQL está rodando
-docker compose ps postgres
 
-# Verificar health
-docker compose exec postgres pg_isready -U imac_user
+**Problema:** Backend não consegue conectar ao PostgreSQL local.
 
-# Ver logs do PostgreSQL
-docker compose logs postgres
+**Soluções:**
 
-# Verificar variável DATABASE_URL
-docker compose exec backend env | grep DATABASE_URL
+1. Verificar se PostgreSQL está rodando no Windows:
+   ```bash
+   # Windows (Services)
+   services.msc
+   # Procure por "postgresql" e verifique se está "Running"
+   
+   # Ou via PowerShell
+   Get-Service -Name postgresql*
+   ```
+
+2. Testar conexão local:
+   ```bash
+   psql -U postgres -d imac_congelados
+   ```
+
+3. Verificar `DATABASE_URL` no container:
+   ```bash
+   docker-compose exec backend env | grep DATABASE_URL
+   ```
+
+4. Verificar se a senha está URL-encoded corretamente no `.env`:
+   - `@` deve ser `%40`
+   - `!` deve ser `%21`
+   - `#` deve ser `%23`
+
+### Erro "JWT_SECRET deve ter no mínimo 32 caracteres"
+
+**Solução:** Atualize o `.env` com secrets mais longos:
+
+```env
+JWT_SECRET=dev_secret_key_with_minimum_32_characters_length_fixed
+JWT_REFRESH_SECRET=dev_refresh_secret_key_with_minimum_32_characters_length_fixed
 ```
 
 ### Migrations falham
 ```bash
 # Ver status
-docker compose exec backend npx prisma migrate status
-
-# Reset (CUIDADO: apaga dados!)
-docker compose exec backend npx prisma migrate reset
+docker-compose exec backend npx prisma migrate status
 
 # Aplicar manualmente
-docker compose exec backend npx prisma migrate deploy
+docker-compose exec backend npx prisma migrate deploy
+
+# Reset (CUIDADO: apaga dados!)
+cd ../../backend
+npx prisma migrate reset
 ```
 
 ### Limpar tudo e recomeçar
 ```bash
-# Parar e remover tudo
-docker compose down -v
+# Parar e remover containers
+docker-compose down -v
 
 # Remover imagens
-docker compose down --rmi all
+docker-compose down --rmi all
 
 # Rebuild completo
-docker compose up --build
+docker-compose up --build
 ```
 
 ## Limpeza
@@ -217,26 +339,20 @@ docker volume prune
 docker system prune -a --volumes
 ```
 
-## Variáveis de Ambiente
+## 📝 Resumo de Arquivos de Configuração
 
-### Desenvolvimento (.env)
-```env
-POSTGRES_USER=imac_user
-POSTGRES_PASSWORD=imac_password
-POSTGRES_DB=imac_congelados
-DATABASE_URL=postgresql://imac_user:imac_password@postgres:5432/imac_congelados?schema=public
-VITE_API_URL=http://localhost:3001/api
-```
+### `.env` (Desenvolvimento)
+- Localização: `infra/docker/.env`
+- Uso: Ambiente de desenvolvimento local
+- Conecta ao PostgreSQL local do Windows
+- **Não commitar no Git** (já está no .gitignore)
 
-### Produção (.env.production)
-```env
-# Use senhas fortes!
-POSTGRES_PASSWORD=<SENHA_FORTE>
-JWT_SECRET=<SECRET_GERADO_32_CHARS>
-JWT_REFRESH_SECRET=<SECRET_GERADO_32_CHARS>
-CORS_ORIGIN=https://seudominio.com
-VITE_API_URL=https://seudominio.com/api
-```
+### `production.env` (Produção)
+- Localização: `infra/docker/production.env`
+- Uso: Ambiente de produção/teste
+- Conecta ao PostgreSQL local do Windows
+- Inclui configurações de Nginx e SSL
+- **Nunca commitar no Git** (já está no .gitignore)
 
 ## Health Checks
 
@@ -244,15 +360,17 @@ VITE_API_URL=https://seudominio.com/api
 # Backend
 curl http://localhost:3001/health
 
-# Frontend (produção)
-curl http://localhost/
+# Frontend (dev)
+curl http://localhost:3000
 
-# PostgreSQL
-docker compose exec postgres pg_isready -U imac_user
+# PostgreSQL (local)
+psql -U postgres -c "SELECT version();"
 ```
 
-## Recursos Úteis
+## 📚 Recursos Úteis
 
 - [Docker Documentation](https://docs.docker.com/)
 - [Docker Compose Documentation](https://docs.docker.com/compose/)
 - [Prisma Docker Guide](https://www.prisma.io/docs/guides/deployment/deployment-guides/deploying-to-docker)
+- [Guia de Produção Completo](../../docs/PRODUCTION_GUIDE.md)
+- [Checklist de Segurança](../../docs/SECURITY.md)

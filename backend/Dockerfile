@@ -1,16 +1,22 @@
 # ================================
 # Stage 1: Dependencies
 # ================================
-FROM node:20-alpine AS dependencies
+FROM node:20-slim AS dependencies
 
 WORKDIR /app
+
+# Instalar OpenSSL e outras dependências necessárias para Prisma
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copiar arquivos de dependências
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar dependências
-RUN npm ci --only=production && \
+# Instalar dependências (incluindo devDependencies para desenvolvimento)
+RUN npm ci --legacy-peer-deps && \
     npm cache clean --force
 
 # Gerar Prisma Client
@@ -19,9 +25,15 @@ RUN npx prisma generate
 # ================================
 # Stage 2: Development
 # ================================
-FROM node:20-alpine AS development
+FROM node:20-slim AS development
 
 WORKDIR /app
+
+# Instalar OpenSSL para Prisma
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copiar node_modules da stage anterior
 COPY --from=dependencies /app/node_modules ./node_modules
@@ -39,11 +51,17 @@ CMD ["npm", "run", "dev"]
 # ================================
 # Stage 3: Production
 # ================================
-FROM node:20-alpine AS production
+FROM node:20-slim AS production
 
 # Criar usuário não-root
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN groupadd -g 1001 nodejs && \
+    useradd -r -u 1001 -g nodejs nodejs
+
+# Instalar OpenSSL para Prisma
+RUN apt-get update && apt-get install -y \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

@@ -93,7 +93,7 @@ export interface Product {
 }
 
 /**
- * Representa um supply (matéria-prima/insumo)
+ * Representa um insumo (matéria-prima)
  */
 export interface Supply {
   id: number;

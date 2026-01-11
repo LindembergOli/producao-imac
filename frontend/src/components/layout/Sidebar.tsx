@@ -4,6 +4,7 @@ import { PRODUCTION_PAGES, REGISTRATION_PAGES } from '../../utils/constants';
 import { X, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import logoImg from '../../assets/logo.png';
+import { routeImports, PageKey } from '../../routes';
 
 const ImacLogo: React.FC = () => {
   return (
@@ -27,6 +28,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isSideba
     setCurrentPage(page);
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
+    }
+  };
+
+  const prefetchPage = (pageName: Page) => {
+    // Tenta carregar o código da página em background quando o usuário passa o mouse
+    const loadFn = routeImports[pageName as PageKey];
+    if (loadFn) {
+      loadFn();
     }
   };
 
@@ -63,7 +72,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isSideba
         <div>
           <h2 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-4">Controle de Produção</h2>
           {PRODUCTION_PAGES.map(({ name, icon: Icon }) => (
-            <button key={name} onClick={() => handleNavigation(name)} className={`w-full text-left ${navLinkClasses(name)}`}>
+            <button
+              key={name}
+              onClick={() => handleNavigation(name)}
+              onMouseEnter={() => prefetchPage(name)}
+              className={`w-full text-left ${navLinkClasses(name)}`}
+            >
               <Icon size={20} className={`mr-3 transition-transform duration-200 ${currentPage === name ? 'scale-110' : 'group-hover:scale-105'}`} />
               <span className="truncate">{name === 'Dashboard' ? 'Visão Geral' : name}</span>
             </button>
@@ -75,7 +89,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isSideba
           <div>
             <h2 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-4">Cadastro</h2>
             {REGISTRATION_PAGES.map(({ name, icon: Icon }) => (
-              <button key={name} onClick={() => handleNavigation(name)} className={`w-full text-left ${navLinkClasses(name)}`}>
+              <button
+                key={name}
+                onClick={() => handleNavigation(name)}
+                onMouseEnter={() => prefetchPage(name)}
+                className={`w-full text-left ${navLinkClasses(name)}`}
+              >
                 <Icon size={20} className={`mr-3 transition-transform duration-200 ${currentPage === name ? 'scale-110' : 'group-hover:scale-105'}`} />
                 <span className="truncate">{name}</span>
               </button>
@@ -88,7 +107,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isSideba
         {isAdmin() && (
           <div>
             <h2 className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2 px-4 mt-4">Administração</h2>
-            <button onClick={() => handleNavigation('Usuários')} className={`w-full text-left ${navLinkClasses('Usuários')}`}>
+            <button
+              onClick={() => handleNavigation('Usuários')}
+              onMouseEnter={() => prefetchPage('Usuários')}
+              className={`w-full text-left ${navLinkClasses('Usuários')}`}
+            >
               <Users size={20} className={`mr-3 transition-transform duration-200 ${currentPage === 'Usuários' ? 'scale-110' : 'group-hover:scale-105'}`} />
               <span className="truncate">Usuários</span>
             </button>
@@ -104,7 +127,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isSideba
 
   return (
     <>
-      {/* Sidebar */}
+      {/* Barra Lateral */}
       <aside
         className={`fixed inset-y-0 left-0 z-30 bg-[#FAFAF9] dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 transition-all duration-300 ease-in-out
           ${isSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full w-72'}

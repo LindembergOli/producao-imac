@@ -46,19 +46,51 @@ cd imac-congelados---controle-de-produção
 
 ### 3. Configurar Variáveis de Ambiente
 
-**backend/.env.production:**
+**⚠️ IMPORTANTE:** A configuração varia dependendo do ambiente:
+
+#### Opção A: Teste Local (Windows - Banco Local)
+
+**infra/docker/.env:**
 ```env
-DATABASE_URL="postgresql://user:password@db:5432/imac_congelados"
-JWT_SECRET="secret-super-seguro-aqui"
+# Banco de Dados Local do Windows
+DATABASE_URL="postgresql://postgres:senha@host.docker.internal:5432/imac_congelados?schema=public"
+JWT_SECRET="secret-super-seguro-minimo-32-caracteres"
+JWT_REFRESH_SECRET="outro-secret-super-seguro-minimo-32-caracteres"
 JWT_EXPIRES_IN="7d"
-PORT=3000
+PORT=3001
 NODE_ENV="production"
+CORS_ORIGIN="https://producaoimac.com"
+VITE_API_URL="https://producaoimac.com/api"
 ```
 
-**frontend/.env.production:**
+**Nota:** Use `host.docker.internal` para conectar ao PostgreSQL do Windows.
+
+#### Opção B: Produção Real (Servidor Linux - Banco Local)
+
+**infra/docker/production.env:**
 ```env
-VITE_API_URL="https://api.seudominio.com"
+# Banco de Dados Local do Servidor Linux
+DATABASE_URL="postgresql://imac_user:senha-forte@localhost:5432/imac_congelados?schema=public"
+JWT_SECRET="secret-super-seguro-minimo-32-caracteres"
+JWT_REFRESH_SECRET="outro-secret-super-seguro-minimo-32-caracteres"
+JWT_EXPIRES_IN="7d"
+PORT=3001
+NODE_ENV="production"
+CORS_ORIGIN="https://seudominio.com"
+VITE_API_URL="https://seudominio.com/api"
 ```
+
+**Nota:** Em servidor Linux, use `localhost` pois o PostgreSQL está no mesmo servidor.
+
+#### Opção C: Produção com Banco em Container (Alternativa)
+
+Se preferir usar PostgreSQL em container (não recomendado para produção):
+
+```env
+DATABASE_URL="postgresql://imac_user:senha@postgres:5432/imac_congelados?schema=public"
+```
+
+**Nota:** Neste caso, descomente o serviço `postgres` no `docker-compose.prod.yml`.
 
 ### 4. Build e Deploy
 
@@ -360,10 +392,6 @@ tail -f /var/log/nginx/error.log
 sudo nginx -t
 ```
 
----
-
-## 📈 Performance
-
 ### Otimizações Nginx
 
 ```nginx
@@ -371,6 +399,12 @@ sudo nginx -t
 location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
     expires 1y;
     add_header Cache-Control "public, immutable";
+}
+
+# Cache para PWA (Manifest e Service Worker) - NÃO CACHEAR
+location ~* (manifest\.webmanifest|sw\.js)$ {
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    expires 0;
 }
 
 # Compressão gzip

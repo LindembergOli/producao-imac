@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import { Plus, Users, Pencil, Trash2, FileSpreadsheet, FileText, ChevronDown, Briefcase, Eye } from 'lucide-react';
 import type { Employee } from '../types';
 import { Sector, Unit, LossType, ErrorCategory, MaintenanceStatus, AbsenceType } from '../types';
@@ -138,6 +139,9 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
     const [deleteSectorData, setDeleteSectorData] = useState<{ sector: string; employeeIds: number[] } | null>(null);
 
 
+    // Debounce de filtros para evitar re-renderização excessiva ao digitar
+    const debouncedFilters = useDebounce(filters, 300);
+
     // Filtra e ordena a lista de funcionários com base nos filtros e permissões
     const filteredAndSortedEmployees = useMemo(() => {
         if (!Array.isArray(employees)) return [];
@@ -148,22 +152,22 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
             : employees.filter(emp => emp.sector !== Sector.MANUTENCAO);
 
         // Aplicar filtros
-        if (filters.sector) {
-            filtered = filtered.filter(emp => emp.sector === filters.sector);
+        if (debouncedFilters.sector) {
+            filtered = filtered.filter(emp => emp.sector === debouncedFilters.sector);
         }
-        if (filters.name) {
+        if (debouncedFilters.name) {
             filtered = filtered.filter(emp =>
-                emp.name.toLowerCase().includes(filters.name.toLowerCase())
+                emp.name.toLowerCase().includes(debouncedFilters.name.toLowerCase())
             );
         }
-        if (filters.role) {
+        if (debouncedFilters.role) {
             filtered = filtered.filter(emp =>
-                emp.role?.toLowerCase().includes(filters.role.toLowerCase())
+                emp.role?.toLowerCase().includes(debouncedFilters.role.toLowerCase())
             );
         }
 
         return [...filtered].sort((a, b) => a.sector.localeCompare(b.sector));
-    }, [employees, user?.role, filters]);
+    }, [employees, user?.role, debouncedFilters]);
 
     // Agrupar funcionários filtrados por setor para exibição em accordions
     const groupedEmployees = useMemo(() => {
@@ -353,10 +357,10 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                 </div>
             </header>
 
-            {/* Filter Bar */}
+            {/* Barra de Filtros */}
             <div className="bg-gray-50 dark:bg-slate-700/30 p-4 rounded-lg shadow-md dark:shadow-lg border border-slate-200/30 dark:border-slate-600/30">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    {/* Sector Filter */}
+                    {/* Filtro de Setor */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Setor
@@ -371,7 +375,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                         </select>
                     </div>
 
-                    {/* Name Filter */}
+                    {/* Filtro de Nome */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Nome
@@ -385,7 +389,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                         />
                     </div>
 
-                    {/* Role Filter */}
+                    {/* Filtro de Cargo */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Cargo
@@ -399,7 +403,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                         />
                     </div>
 
-                    {/* Clear Filters Button */}
+                    {/* Botão Limpar Filtros */}
                     <div className="flex items-end">
                         <button
                             onClick={clearFilters}
@@ -488,7 +492,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                                             <div className="animate-fadeIn">
                                                 <div className="overflow-x-auto w-full">
                                                     <div className="min-w-[800px] align-middle">
-                                                        {/* Header */}
+                                                        {/* Cabeçalho */}
                                                         <div className="grid grid-cols-10 gap-4 px-4 py-3 bg-imac-secondary/20 dark:bg-slate-700/50">
                                                             <div className="col-span-3 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Setor</div>
                                                             <div className="col-span-4 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary">Nome</div>
@@ -496,7 +500,7 @@ const Employees: React.FC<EmployeesProps> = ({ employees, setEmployees }) => {
                                                             <div className="col-span-1 text-sm font-semibold text-imac-tertiary dark:text-imac-secondary text-center no-print">Ações</div>
                                                         </div>
 
-                                                        {/* Body */}
+                                                        {/* Corpo da Tabela */}
                                                         <div className="divide-y divide-gray-100 dark:divide-slate-700">
                                                             {sectorEmployees.map((emp) => (
                                                                 <div key={emp.id} className="grid grid-cols-10 gap-4 items-center px-4 py-4 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">

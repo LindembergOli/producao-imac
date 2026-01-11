@@ -22,7 +22,11 @@ export const Login: React.FC = () => {
         try {
             await login(email, password);
         } catch (err: any) {
-            setError(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
+            if (err.response?.status === 429) {
+                setError('Muitas tentativas. Por segurança, aguarde 1 minuto antes de tentar novamente.');
+            } else {
+                setError(err.response?.data?.message || 'Erro ao fazer login. Verifique suas credenciais.');
+            }
         } finally {
             setLoading(false);
         }
@@ -30,28 +34,28 @@ export const Login: React.FC = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4">
-            {/* Background Image with Overlay */}
+            {/* Imagem de Fundo com Sobreposição */}
             <div
                 className="absolute inset-0 bg-cover bg-center"
                 style={{
-                    backgroundImage: 'url("/images/background-login.jpg")'
+                    backgroundImage: 'url("/images/background-login.webp")'
                 }}
             />
 
-            {/* Dark Overlay for Contrast */}
+            {/* Sobreposição Escura para Contraste */}
             <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 via-slate-800/60 to-slate-900/70" />
 
-            {/* Decorative Blur Circles */}
+            {/* Círculos de Desfoque Decorativos */}
             <div className="absolute top-20 left-20 w-96 h-96 bg-yellow-500/20 rounded-full blur-3xl" />
             <div className="absolute bottom-20 right-20 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl" />
 
-            {/* Login Card with Glassmorphism */}
+            {/* Cartão de Login com Glassmorphism */}
             <div className="relative z-10 max-w-md w-full">
-                {/* Logo Container */}
+                {/* Container do Logo */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl mb-4 overflow-hidden">
                         <img
-                            src="/images/logo.png"
+                            src="/images/logo.webp"
                             alt="IMAC Logo"
                             className="w-full h-full object-cover"
                         />
@@ -64,7 +68,7 @@ export const Login: React.FC = () => {
                     </p>
                 </div>
 
-                {/* Glassmorphism Card */}
+                {/* Cartão Glassmorphism */}
                 <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20">
                     <h2 className="text-2xl font-semibold text-white mb-6">
                         Entrar no Sistema
@@ -150,7 +154,7 @@ export const Login: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Footer */}
+                {/* Rodapé */}
                 <div className="mt-8 text-center text-sm text-slate-300 drop-shadow">
                     <p>© 2025 IMAC Congelados. Todos os direitos reservados.</p>
                 </div>

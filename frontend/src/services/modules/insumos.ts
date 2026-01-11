@@ -3,7 +3,7 @@
  */
 
 import api from '../api';
-import type { Insumo } from '../../types';
+import type { Supply as Insumo } from '../../types';
 
 interface PaginatedResponse<T> {
     data: T[];
