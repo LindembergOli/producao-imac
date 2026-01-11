@@ -1,8 +1,10 @@
 /**
  * Logger Estruturado com Winston
+ * Implementa rotação diária de logs para evitar crescimento indefinido
  */
 
 import winston from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
 import { config } from '../config/env.js';
 
 // Definir formato de log
@@ -29,25 +31,33 @@ const consoleFormat = winston.format.combine(
     })
 );
 
+// Configuração de rotação diária para logs de erro
+const errorRotateTransport = new DailyRotateFile({
+    filename: 'logs/error-%DATE%.log',
+    datePattern: 'YYYY-MM-DD',
+    level: 'error',
+    maxSize: '20m',      // Máximo 20MB por arquivo
+    maxFiles: '14d',     // Manter logs por 14 dias
+    zippedArchive: true, // Comprimir logs antigos
+});
+
+// Configuração de rotação diária para todos os logs
+const combinedRotateTransport = new DailyRotateFile({
+    filename: 'logs/combined-%DATE%.log',
+    datePattern: 'YYYY-MM-DD',
+    maxSize: '20m',      // Máximo 20MB por arquivo
+    maxFiles: '30d',     // Manter logs por 30 dias
+    zippedArchive: true, // Comprimir logs antigos
+});
+
 // Criar logger
 const logger = winston.createLogger({
     level: config.logging.level,
     format: logFormat,
     defaultMeta: { service: 'imac-backend' },
     transports: [
-        // Erros em arquivo separado
-        new winston.transports.File({
-            filename: 'logs/error.log',
-            level: 'error',
-            maxsize: 5242880, // 5MB
-            maxFiles: 5,
-        }),
-        // Todos os logs
-        new winston.transports.File({
-            filename: 'logs/combined.log',
-            maxsize: 5242880, // 5MB
-            maxFiles: 5,
-        }),
+        errorRotateTransport,
+        combinedRotateTransport,
     ],
 });
 
