@@ -23,6 +23,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import compression from 'compression';
 import { config } from './config/env.js';
 import { helmetConfig, corsConfig, globalRateLimitConfig } from './config/security.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
@@ -33,6 +34,13 @@ import { requestIdMiddleware, requestEndMiddleware } from './middlewares/request
 import routes from './routes.js';
 
 const app = express();
+
+// ========================================
+// COMPRESSÃO HTTP (GZIP)
+// ========================================
+
+// Comprimir respostas HTTP para melhorar performance
+app.use(compression());
 
 // ========================================
 // HTTPS OBRIGATÓRIO (PRODUÇÃO)
