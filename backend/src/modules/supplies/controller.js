@@ -39,7 +39,6 @@ export const getBySector = async (req, res, next) => {
 
 export const create = async (req, res, next) => {
     try {
-        console.log('📦 Dados recebidos para criar supply:', JSON.stringify(req.body, null, 2));
         const supply = await supplyService.create(req.body);
 
         // Auditar criação
@@ -59,16 +58,13 @@ export const create = async (req, res, next) => {
             statusCode: 201,
         });
     } catch (err) {
-        console.error('❌ Erro ao criar supply:', err.message);
+        logger.error('Erro ao criar supply', { error: err.message, stack: err.stack });
         next(err);
     }
 };
 
 export const update = async (req, res, next) => {
     try {
-        console.log('📝 Dados recebidos para atualizar supply:', JSON.stringify(req.body, null, 2));
-        console.log('📝 ID do supply:', req.params.id);
-
         const supply = await supplyService.update(req.params.id, req.body);
 
         // Auditar atualização
@@ -87,7 +83,7 @@ export const update = async (req, res, next) => {
             message: 'Supply atualizado com sucesso',
         });
     } catch (err) {
-        console.error('❌ Erro ao atualizar supply:', err.message);
+        logger.error('Erro ao atualizar supply', { error: err.message, supplyId: req.params.id });
         next(err);
     }
 };
@@ -100,7 +96,6 @@ export const remove = async (req, res, next) => {
         await supplyService.remove(req.params.id);
 
         // Auditar deleção
-        console.log('📝 Auditando DELETE...');
         await logAudit({
             userId: req.user?.id,
             action: 'DELETE_RECORD',
@@ -115,7 +110,6 @@ export const remove = async (req, res, next) => {
             ipAddress: req.ip,
             userAgent: req.get('user-agent'),
         });
-        logger.info('✅ DELETE auditado com sucesso');
 
         return success(res, {
             data: null,

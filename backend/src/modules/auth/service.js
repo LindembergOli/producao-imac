@@ -472,18 +472,21 @@ export const forgotPassword = async (email) => {
         },
     });
 
-    // MOCK: Como não há serviço de email, logamos o token no console
+    // MOCK: Como não há serviço de email, logamos informações no logger
     // EM PRODUÇÃO: Substituir por envio real de email
     const resetLink = `${config.cors.origin}/reset-password?token=${token}`;
 
-    console.log('\n==================================================');
-    console.log('🔑 LINK DE RECUPERAÇÃO DE SENHA (MOCK EMAIL) 🔑');
-    console.log(`Para: ${email}`);
-    console.log(`Link: ${resetLink}`);
-    console.log(`Token: ${token}`);
-    console.log('==================================================\n');
-
-    logger.info('Token de recuperação gerado', { userId: user.id });
+    // Log seguro (apenas em desenvolvimento)
+    if (config.isDevelopment) {
+        logger.info('Token de recuperação gerado (DEV)', {
+            userId: user.id,
+            email: maskSensitiveData(email, 3),
+            resetLink: maskSensitiveData(resetLink, 20),
+            tokenPreview: `${token.substring(0, 8)}...`,
+        });
+    } else {
+        logger.info('Token de recuperação gerado', { userId: user.id });
+    }
 };
 
 /**

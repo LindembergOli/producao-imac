@@ -56,8 +56,6 @@ export const logAudit = async ({
     userAgent = null,
 }) => {
     try {
-        console.log('🔍 logAudit chamado:', { userId, action, entity, entityId });
-
         await prisma.auditLog.create({
             data: {
                 userId,
@@ -70,7 +68,6 @@ export const logAudit = async ({
             },
         });
 
-        console.log('✅ Auditoria registrada com sucesso');
         logger.info('Ação auditada', {
             userId,
             action,
@@ -79,10 +76,9 @@ export const logAudit = async ({
         });
     } catch (error) {
         // Não falhar a requisição se auditoria falhar
-        console.error('❌ ERRO no logAudit:', error.message);
-        console.error('Stack completo:', error.stack);
         logger.error('Erro ao registrar auditoria', {
             error: error.message,
+            stack: error.stack,
             userId,
             action,
         });

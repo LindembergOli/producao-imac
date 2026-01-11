@@ -82,7 +82,6 @@ export const getBySector = async (req, res, next) => {
  */
 export const create = async (req, res, next) => {
     try {
-        console.log('📦 Dados recebidos para criar produto:', JSON.stringify(req.body, null, 2));
         const product = await productService.create(req.body);
 
         // Auditar criação
@@ -102,7 +101,7 @@ export const create = async (req, res, next) => {
             statusCode: 201,
         });
     } catch (err) {
-        console.error('❌ Erro ao criar produto:', err.message);
+        logger.error('Erro ao criar produto', { error: err.message, stack: err.stack });
         next(err);
     }
 };
@@ -120,9 +119,6 @@ export const create = async (req, res, next) => {
  */
 export const update = async (req, res, next) => {
     try {
-        console.log('📝 Dados recebidos para atualizar produto:', JSON.stringify(req.body, null, 2));
-        console.log('📝 ID do produto:', req.params.id);
-
         const product = await productService.update(req.params.id, req.body);
 
         // Auditar atualização
@@ -141,7 +137,7 @@ export const update = async (req, res, next) => {
             message: 'Produto atualizado com sucesso',
         });
     } catch (err) {
-        console.error('❌ Erro ao atualizar produto:', err.message);
+        logger.error('Erro ao atualizar produto', { error: err.message, productId: req.params.id });
         next(err);
     }
 };
@@ -164,7 +160,6 @@ export const remove = async (req, res, next) => {
         await productService.remove(req.params.id);
 
         // Auditar deleção
-        console.log('📝 Auditando DELETE...');
         await logAudit({
             userId: req.user?.id,
             action: 'DELETE_RECORD',
@@ -179,7 +174,6 @@ export const remove = async (req, res, next) => {
             ipAddress: req.ip,
             userAgent: req.get('user-agent'),
         });
-        logger.info('✅ DELETE auditado com sucesso');
 
         return success(res, {
             data: null,
