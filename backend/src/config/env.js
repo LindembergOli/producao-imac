@@ -87,7 +87,7 @@ function validateSecrets() {
 
     for (const { name, value } of secretsToCheck) {
         const lowerValue = value.toLowerCase();
-        
+
         for (const forbidden of FORBIDDEN_SECRET_PATTERNS) {
             if (lowerValue.includes(forbidden.toLowerCase())) {
                 console.error(`\n🚨 ERRO DE SEGURANÇA CRÍTICO 🚨`);

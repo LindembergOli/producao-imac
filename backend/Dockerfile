@@ -70,7 +70,11 @@ COPY --from=dependencies --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=dependencies --chown=nodejs:nodejs /app/package*.json ./
 
 # Copiar código fonte
+# Copiar código fonte
 COPY --chown=nodejs:nodejs . .
+
+# Criar diretório de logs e garantir permissões
+RUN mkdir -p logs && chown -R nodejs:nodejs logs
 
 # Mudar para usuário não-root
 USER nodejs

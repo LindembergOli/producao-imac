@@ -61,14 +61,12 @@ const logger = winston.createLogger({
     ],
 });
 
-// Em desenvolvimento, logar também no console
-if (config.isDevelopment) {
-    logger.add(
-        new winston.transports.Console({
-            format: consoleFormat,
-        })
-    );
-}
+// Logar sempre no console (prática recomendada para Docker/Containers)
+logger.add(
+    new winston.transports.Console({
+        format: consoleFormat,
+    })
+);
 
 /**
  * Middleware para logar requisições HTTP.
