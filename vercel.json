@@ -1,0 +1,32 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "api/**/*.js",
+            "use": "@vercel/node"
+        },
+        {
+            "src": "frontend/package.json",
+            "use": "@vercel/static-build",
+            "config": {
+                "distDir": "frontend/dist"
+            }
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/(.*)",
+            "dest": "/api/$1"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/frontend/$1"
+        }
+    ],
+    "env": {
+        "DATABASE_URL": "@database_url",
+        "JWT_SECRET": "@jwt_secret",
+        "JWT_REFRESH_SECRET": "@jwt_refresh_secret",
+        "CORS_ORIGIN": "@cors_origin"
+    }
+}
