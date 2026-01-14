@@ -1,0 +1,1 @@
+Deploy trigger para forçar atualização do Vercel com a correção do React.
